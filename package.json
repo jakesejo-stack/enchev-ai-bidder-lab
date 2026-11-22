@@ -1,0 +1,28 @@
+{
+  "name": "enchev-ai-bidder-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ENCHEV AI Bidder Lab \u2014 DEMO live-auction bidding UI with DAVID (Bulgarian). Not connected to real auctions.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "test": "node scripts/test.mjs",
+    "check": "npm run typecheck && npm test && npm run build",
+    "e2e": "node tests/e2e/run.mjs"
+  },
+  "dependencies": {
+    "three": "0.187.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.3",
+    "esbuild": "0.28.2",
+    "typescript": "6.0.3"
+  },
+  "optionalDependencies": {
+    "@fontsource-variable/montserrat": "^5.0.0"
+  }
+}
