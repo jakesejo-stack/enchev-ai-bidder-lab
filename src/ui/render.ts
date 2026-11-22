@@ -14,8 +14,10 @@ import type { AnalyticsStore, EventRecorder } from '../analytics/store.js';
 import { auctionsCsv, bidsCsv, dayString, rangeFor, summarize, type RangeKind, type Summary } from '../analytics/aggregate.js';
 import { availableSources, defaultSource, demoAllowed, type SourceKind } from '../analytics/sources.js';
 import { generateDemoHistory } from '../analytics/demo-history.js';
+import type { DealService } from '../deal/service.js';
+import { mountWorkspace } from './workspace.js';
 
-const ROUTES = ['live', 'dashboard', 'ai', 'bids', 'history', 'real', 'settings'] as const;
+const ROUTES = ['live', 'dashboard', 'ai', 'bids', 'history', 'workspace', 'real', 'settings'] as const;
 type Route = (typeof ROUTES)[number];
 const timeFmt = new Intl.DateTimeFormat('bg-BG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
@@ -38,7 +40,7 @@ function setHtml(el: Element, h: string, cache: Map<Element, string>): void {
 
 export interface AnalyticsDeps { store: AnalyticsStore; recorder: EventRecorder | null; }
 
-export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter | null, analytics: AnalyticsDeps): void {
+export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter | null, analytics: AnalyticsDeps, deal: DealService | null = null): void {
   root.innerHTML = APP_HTML;
   const ref = <T extends HTMLElement = HTMLElement>(name: string): T => {
     const el = document.querySelector<T>(`[data-ref="${name}"]`);
@@ -574,6 +576,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
             : 'Няма връзка с услугата в реално време на Enchev Auctions, затова няма реални оферти за показване.');
       }
     }
+    if (r === 'workspace') ws?.render();
     if (r === 'settings') setText(ref('audioInfo'), d.audioInfo);
     if (r === 'settings') setText(ref('realReason'), CONFIG.realMode.enabled ? 'конфигуриран' : `не е свързан. ${CONFIG.realMode.reason}`);
 
@@ -589,6 +592,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     lastAttemptState = now;
   }
 
+  const ws = deal ? mountWorkspace(ref('workspace'), { ctrl, deal, demo: !!demo, myBidderId: ctrl.adapter.bidderId, toast }) : null;
   ctrl.subscribe(render);
   applyRoute(false);
 }

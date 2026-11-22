@@ -527,7 +527,7 @@ await run('real data (read-only): Enchev status, real lots with countdowns, no f
   return `${apiCalls.length} GET`;
 });
 
-await run('real data (phone): unavailable catalogue is explained; 5-item nav fits', {
+await run('real data (phone): unavailable catalogue is explained; 6-item nav fits', {
   ctx: PHONE(390, 844), query: '?seed=3&competitors=0', before: (page) => enchevFixture(page, { catalogStatus: 503 }),
 }, async (p) => {
   await p.tap('.bottomnav a[data-nav="real"]');
@@ -651,8 +651,166 @@ await run('real bid endpoint refuses (501) and no request leaves the origin', { 
   expect(external.length === 0, 'external requests: ' + external.join(', '));
 });
 
+
+// ---------------------------------------------------------------- Vehicle Deal Workspace
+const JPG = (n = 1) => ({ name: `snimka-${n}.jpg`, mimeType: 'image/jpeg', buffer: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from(`demo photo ${n} ${Math.random()}`)]) });
+const PDFF = (n = 1) => ({ name: `dokument-${n}.pdf`, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF-1.4\n% sample document ${n} ${Math.random()}\n`) });
+const STAMP = /\d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}:\d{2}/;
+const ws = {
+  role: (p, r) => p.click(`[data-role="${r}"]`),
+  tab: (p, t) => p.click(`[data-tab="${t}"]`),
+  status: (p, doc) => p.getAttribute(`[data-doc-row="${doc}"]`, 'data-status'),
+  async upload(p, doc, mode, file) {
+    const [fc] = await Promise.all([p.waitForEvent('filechooser'), p.click(`[data-doc-row="${doc}"] [data-upload="${mode}"]`)]);
+    await fc.setFiles(file);
+    await p.waitForSelector(`[data-doc-row="${doc}"][data-status="pending"]`, { timeout: 8000 });
+  },
+  async approve(p, doc, vin = false) {
+    if (vin) await p.check(`[data-doc-row="${doc}"] [data-field="vin"]`);
+    await p.click(`[data-doc-row="${doc}"] [data-review="approved"]`);
+    await p.waitForSelector(`[data-doc-row="${doc}"][data-status="approved"]`, { timeout: 8000 });
+  },
+};
+
+await run('deal workspace (desktop): LOT+VIN → documents (camera/file) → admin check with date+time → server WINNER → invoice → provider payment → transport → buyer receipt; chain verified', {
+  query: '?seed=3&competitors=0#/workspace', tts: true,
+}, async (p) => {
+  await p.waitForFunction(() => window.__bidder.deal.key && document.querySelector('[data-ws="vin"]'), null, { timeout: 8000 });
+  expect((await p.innerText('[data-ws="lot"]')) === 'DEMO-0001', 'LOT ID from the auction listing');
+  expect((await p.innerText('[data-ws="vin"]')) === 'EADEMXC0NCEPT0001', 'VIN from the auction listing');
+  expect((await p.innerText('main')).includes('ЛОКАЛНО ТЕСТОВО СЪСТОЯНИЕ'), 'demo/local state is labelled');
+  // Seller: VIN photos from the camera; a non-image file is refused by its bytes.
+  const [fc0] = await Promise.all([p.waitForEvent('filechooser'), p.click('[data-doc-row="vin_photos"] [data-upload="camera"]')]);
+  expect((await p.getAttribute('[data-ws="file"]', 'capture')) === 'environment', 'camera capture requested');
+  await fc0.setFiles({ name: 'evil.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('MZ\x90\x00 executable') });
+  await p.waitForTimeout(400);
+  expect((await ws.status(p, 'vin_photos')) === 'missing', 'disguised non-image refused');
+  await ws.upload(p, 'vin_photos', 'camera', JPG(1));
+  await ws.upload(p, 'registration', 'file', PDFF(1));
+  await ws.upload(p, 'ownership', 'file', PDFF(2));
+  expect((await p.locator('[data-doc-row="invoice"] [data-upload]').count()) === 0, 'invoice cannot be uploaded before WINNER');
+  // Admin: VIN must be confirmed; rejection needs a reason; every decision has date + time.
+  await ws.role(p, 'admin');
+  expect(await p.locator('[data-doc-row="vin_photos"] [data-review="approved"]').isDisabled(), 'approve disabled until VIN confirmed');
+  await ws.approve(p, 'vin_photos', true);
+  expect(STAMP.test(await p.innerText('[data-doc-row="vin_photos"] .ws-sub')), 'approval shows date and time');
+  await ws.approve(p, 'registration', true);
+  await p.click('[data-doc-row="ownership"] [data-review="rejected"]');
+  await p.waitForTimeout(300);
+  expect((await ws.status(p, 'ownership')) === 'pending', 'rejection without a reason is refused');
+  await p.fill('[data-doc-row="ownership"] [data-field="note"]', 'Нечетлив документ');
+  await p.click('[data-doc-row="ownership"] [data-review="rejected"]');
+  await p.waitForSelector('[data-doc-row="ownership"][data-status="rejected"]');
+  await ws.role(p, 'seller');
+  await ws.upload(p, 'ownership', 'file', PDFF(3));
+  await ws.role(p, 'admin');
+  await ws.approve(p, 'ownership');
+  // The auction (same server stream as the bidder) decides the WINNER.
+  await p.evaluate(async () => { const c = window.__bidder.ctrl; c.openConfirm(); c.setConsent(true); await c.submitBid(); window.__bidder.demo.server.endIn(400); });
+  await p.waitForFunction(() => window.__bidder.deal.state.winner, null, { timeout: 15000 });
+  const w = await p.evaluate(() => ({ w: window.__bidder.deal.state.winner, me: window.__bidder.ctrl.adapter.bidderId }));
+  expect(w.w.bidderId === w.me && w.w.amount === 10_000, `winner ${JSON.stringify(w.w)}`);
+  await ws.tab(p, 'winner');
+  expect((await p.innerText('[data-ws="winner"]')).includes('Ти'), 'WINNER shown from the server event');
+  expect((await p.locator('main button', { hasText: /Платено|Потвърди плащане/ }).count()) === 0, 'there is no "paid" button');
+  const forged = await p.evaluate(async () => {
+    const d = window.__bidder.deal;
+    const a = await d.log.append('ai', { type: 'payment_confirmed', amount: 10_000, reference: 'x' });
+    const b = await d.log.append('buyer', { type: 'receipt_confirmed', car: true, originals: true });
+    const c = await d.log.append('admin', { type: 'winner_confirmed', bidderId: 'x', amount: 1, bidId: 'y', endedAt: 1, bids: 1 });
+    return [a.ok || a.code, b.ok || b.code, c.ok || c.code];
+  });
+  expect(forged.join() === 'FORBIDDEN,NOT_DELIVERED,FORBIDDEN', `AI/user cannot confirm: ${forged}`);
+  // Invoice (seller) → admin → buyer pays → provider confirms.
+  await ws.tab(p, 'docs');
+  await ws.role(p, 'seller');
+  await p.fill('[data-doc-row="invoice"] [data-field="amount"]', '350');
+  await ws.upload(p, 'invoice', 'file', PDFF(4));
+  expect((await p.innerText('[data-doc-row="invoice"]')).includes('350'), 'invoice amount recorded');
+  await ws.role(p, 'admin');
+  await ws.approve(p, 'invoice');
+  await ws.role(p, 'buyer');
+  await ws.upload(p, 'payment_proof', 'camera', JPG(2));
+  await p.waitForFunction(() => window.__bidder.deal.state.payment, null, { timeout: 10000 });
+  expect((await p.evaluate(() => window.__bidder.deal.state.payment.amount)) === 35_000, 'provider amount = approved invoice');
+  // Release + transport.
+  await ws.role(p, 'seller');
+  await ws.upload(p, 'transfer_poa', 'file', PDFF(5));
+  await ws.upload(p, 'pickup_auth', 'file', PDFF(6));
+  await ws.role(p, 'admin');
+  await ws.approve(p, 'transfer_poa');
+  await ws.approve(p, 'pickup_auth');
+  await ws.role(p, 'carrier');
+  await ws.tab(p, 'transport');
+  await p.click('[data-transport="picked_up"]');
+  await p.waitForSelector('[data-transport="in_transit"]');
+  await ws.tab(p, 'docs');
+  await ws.upload(p, 'cmr', 'camera', JPG(3));
+  await ws.role(p, 'admin');
+  await ws.approve(p, 'cmr');
+  await ws.role(p, 'carrier');
+  await ws.tab(p, 'transport');
+  await p.click('[data-transport="in_transit"]');
+  await p.click('[data-transport="delivered"]');
+  await p.waitForFunction(() => window.__bidder.deal.state.transport.delivered);
+  await ws.tab(p, 'docs');
+  await ws.upload(p, 'delivery_protocol', 'file', PDFF(7));
+  await ws.role(p, 'admin');
+  await ws.approve(p, 'delivery_protocol');
+  // Buyer: both the car AND the original documents.
+  await ws.role(p, 'buyer');
+  await ws.tab(p, 'transport');
+  await p.check('[data-field="car"]');
+  expect(await p.locator('[data-receipt]').isDisabled(), 'needs the original documents too');
+  await p.check('[data-field="originals"]');
+  await p.click('[data-receipt]');
+  await p.waitForSelector('[data-ws="received"]');
+  expect((await p.innerText('[data-ws="stage"]')).includes('Всички 8 етапа') && (await p.innerText('[data-ws="stage"]')).includes('10/10'), 'deal complete, 10/10');
+  await ws.tab(p, 'history');
+  await p.click('[data-verify="chain"]');
+  await p.waitForSelector('[data-ws="chain"][data-ok="true"]');
+  await p.click('[data-verify="files"]');
+  await p.waitForSelector('[data-ws="files"]');
+  const files = await p.innerText('[data-ws="files"]');
+  expect(/^(\d+) от \1 файла/.test(files), files);
+  const n = await p.evaluate(() => window.__bidder.deal.log.events.length);
+  const spoken = await p.evaluate(() => window.__bidder.ctrl.david.captions.map((c) => c.text).join(' | '));
+  expect(spoken.includes('Сделка DEMO-0001: потвърден winner — готово.'), 'DAVID announces deal stages');
+  await p.screenshot({ path: join(shots, 'desktop-1440-workspace.png') });
+  // Same device, after reload: the deal comes back and the chain still verifies.
+  await p.reload();
+  await p.waitForFunction((k) => window.__bidder.deal.log.events.length === k && window.__bidder.deal.chain?.ok, n, { timeout: 8000 });
+  return `${n} events, ${files}`;
+});
+
+await run('deal workspace (phone 390): no overflow, camera upload, ≥ 44 px targets', { ctx: PHONE(390, 844), query: '?seed=3&competitors=0' }, async (p) => {
+  await p.tap('.bottomnav a[data-nav="workspace"]');
+  await p.waitForFunction(() => document.documentElement.dataset.route === 'workspace' && document.querySelector('[data-ws="vin"]'));
+  await ws.upload(p, 'vin_photos', 'camera', JPG(9));
+  const m = await p.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: innerWidth }));
+  expect(m.sw <= m.iw, `no horizontal overflow (${m.sw}/${m.iw})`);
+  const small = await p.evaluate(() => [...document.querySelectorAll('.view-ws button:not(.linkish), .view-ws .btn')].filter((e) => { const r = e.getBoundingClientRect(); return r.width && r.height < 40; }).length);
+  expect(small === 0, `${small} small tap targets`);
+  await p.tap('[data-role="admin"]');
+  await p.waitForSelector('[data-doc-row="vin_photos"] [data-review="approved"]');
+  await p.screenshot({ path: join(shots, 'mobile-390-workspace.png'), fullPage: true });
+});
+
+await run('deal workspace: real Enchev lots are read-only (no VIN, no uploads, nothing recorded)', {
+  query: '?seed=3&competitors=0#/workspace', before: (page) => enchevFixture(page),
+}, async (p) => {
+  await p.waitForSelector('[data-ws-src="real"]');
+  const before = await p.evaluate(() => window.__bidder.deal.log.events.length);
+  await p.click('[data-ws-src="real"]');
+  await p.waitForFunction(() => document.querySelectorAll('.view-ws .rlot').length === 2, null, { timeout: 8000 });
+  const t = await p.innerText('.view-ws');
+  expect(t.includes('само четене') && t.includes('VIN: не е публикуван'), 'read-only real lots');
+  expect((await p.locator('.view-ws [data-upload], .view-ws [data-review]').count()) === 0, 'no upload/review actions for real lots');
+  expect((await p.evaluate(() => window.__bidder.deal.log.events.length)) === before, 'nothing recorded');
+});
+
 await run('views: dashboard, AI, bids, history, settings render in Bulgarian', { query: '?seed=3&competitors=0' }, async (p) => {
-  for (const [route, needle] of [['dashboard', 'Табло'], ['ai', 'AiBidder и DAVID'], ['bids', 'Моите оферти'], ['history', 'Транскрипт на DAVID'], ['real', 'Реални данни'], ['settings', 'Висок контраст']]) {
+  for (const [route, needle] of [['dashboard', 'Табло'], ['ai', 'AiBidder и DAVID'], ['bids', 'Моите оферти'], ['history', 'Транскрипт на DAVID'], ['workspace', 'Vehicle Deal Workspace'], ['real', 'Реални данни'], ['settings', 'Висок контраст']]) {
     await p.click(`.sidenav a[data-nav="${route}"]`);
     await p.waitForFunction((r) => document.documentElement.dataset.route === r, route);
     expect((await p.innerText('main')).includes(needle), `${route} contains ${needle}`);

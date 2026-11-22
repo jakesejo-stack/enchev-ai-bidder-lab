@@ -8,6 +8,7 @@ const navItems: [string, string, string][] = [
   ['ai', 'chip', 'AI наддаване'],
   ['bids', 'layers', 'Моите оферти'],
   ['history', 'clock', 'История'],
+  ['workspace', 'doc', 'Сделка'],
   ['real', 'wifi', 'Реални данни'],
   ['settings', 'gear', 'Настройки'],
 ];
@@ -16,6 +17,7 @@ const mobileNav: [string, string, string][] = [
   ['live', 'gavel', 'На живо'],
   ['ai', 'chip', 'AI'],
   ['bids', 'layers', 'Оферти'],
+  ['workspace', 'doc', 'Сделка'],
   ['real', 'wifi', 'Реални'],
 ];
 
@@ -149,6 +151,8 @@ export const APP_HTML = `
         <a class="card dash-card" href="#/real"><h2>Режим</h2><p class="dash-big">ДЕМО — активен</p><p data-ref="dReal">РЕАЛНИ ДАННИ — само четене</p><span class="btn sm">Реални данни →</span></a>
       </div>
     </section>
+
+    <section class="view view-ws" data-view="workspace" aria-labelledby="ws-h" data-ref="workspace" hidden></section>
 
     <section class="view" data-view="real" aria-labelledby="real-h" hidden>
       <h1 id="real-h">Реални данни · Enchev Auctions</h1>
