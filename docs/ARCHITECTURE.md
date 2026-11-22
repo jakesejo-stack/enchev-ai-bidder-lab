@@ -8,6 +8,7 @@
 | Bids | Validated by the simulated server; never leave the browser | Server-side: session auth, validation, idempotency, rate limit, audit, then publish |
 | `/api/bids` | Always `501 REAL_BIDDING_NOT_CONNECTED` | Proxy to the real backend or removed |
 | Real mode | Disabled in `src/config.ts`; UI shows "РЕАЛЕН — не е свързан" | Configure endpoints at build time after review; no API keys in the browser |
+| Real data (read-only) | `#/real` via `api/enchev.js`: Enchev service readiness + verified real lots, GET-only allow-list, no credentials | Bids/events need Enchev's realtime service + a read-only grant + payload schema (docs/ENCHEV_REAL_DATA.md) |
 | AI | Transparent rules over observed events + your limit. No success %, no market value | Only add predictions backed by a validated, documented model |
 | Voice | Browser TTS (Bulgarian voice only) + captions; Web Speech recognition for 4 commands | Same; recognition is processed by the browser vendor (e.g. Google in Chrome) |
 
@@ -15,7 +16,7 @@
 
 ```
 src/domain      pure, unit-tested: types, money (integer cents), bid rules, event reducer, server clock, advisor
-src/adapters    AuctionAdapter interface · DemoAdapter + DemoAuctionServer · RealAdapter (disabled skeleton)
+src/adapters    AuctionAdapter interface · DemoAdapter + DemoAuctionServer · RealAdapter (disabled skeleton) · enchev-readonly (real lots + service health via /api/enchev)
 src/app         Controller: state, narration, bid flow (confirmation, idempotency), heartbeat/gap resync
 src/voice       David (TTS queue, captions, pause = voice only), Microphone (commands)
 src/ui          markup + render (one DOM; CSS lays it out for desktop ≥1024 px and phones)

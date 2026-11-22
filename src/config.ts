@@ -7,6 +7,6 @@ export interface AppConfig {
 export const CONFIG: AppConfig = {
   realMode: {
     enabled: false,
-    reason: 'Няма оторизиран API/WebSocket на Enchev Auctions за тази лаборатория.',
+    reason: 'Реалното наддаване е изключено, докато не бъде изрично одобрено и свързано с оторизиран бекенд на Enchev Auctions. Реалните данни се показват само за четене в „Реални данни“.',
   },
 };

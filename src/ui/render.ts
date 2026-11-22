@@ -9,8 +9,9 @@ import { formatCountdown } from '../domain/clock.js';
 import { stepFor } from '../domain/rules.js';
 import { CONFIG } from '../config.js';
 import type { Caption } from '../voice/david.js';
+import { loadReadOnly, lotCountdown, LOT_STATUS_BG, SERVICE_BG, type ReadOnlySnapshot } from '../adapters/enchev-readonly.js';
 
-const ROUTES = ['live', 'dashboard', 'ai', 'bids', 'history', 'settings'] as const;
+const ROUTES = ['live', 'dashboard', 'ai', 'bids', 'history', 'real', 'settings'] as const;
 type Route = (typeof ROUTES)[number];
 const timeFmt = new Intl.DateTimeFormat('bg-BG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
@@ -18,6 +19,13 @@ function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
 function setText(el: Element, t: string): void { if (el.textContent !== t) el.textContent = t; }
+/** Long countdowns for real lots (days/hours), short ones as mm:ss. */
+function formatLong(ms: number): string {
+  const m = Math.floor(ms / 60_000);
+  if (m >= 24 * 60) return `${Math.floor(m / 1440)} д ${Math.floor((m % 1440) / 60)} ч`;
+  if (m >= 60) return `${Math.floor(m / 60)} ч ${m % 60} мин`;
+  return formatCountdown(ms);
+}
 function setHtml(el: Element, h: string, cache: Map<Element, string>): void {
   if (cache.get(el) === h) return;
   cache.set(el, h);
@@ -53,9 +61,35 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     });
     if (focus) document.getElementById('main')?.focus({ preventScroll: false });
     bubble.layout(); // the bid bar shows only on the live view (phones)
+    if (r === 'real') {
+      if (bubble.isOpen) bubble.setOpen(false, false);
+      refreshReal();
+      if (!realTimer) realTimer = window.setInterval(refreshReal, 30_000);
+    } else if (realTimer) {
+      clearInterval(realTimer);
+      realTimer = 0;
+    }
     render();
   }
   addEventListener('hashchange', () => applyRoute(true));
+
+  // ------------------------------------------------------------ real data (read-only bridge)
+  let real: ReadOnlySnapshot | null = null;
+  let realLoading = false;
+  let realTimer = 0;
+  let lastRealSummary = '';
+  function refreshReal(): void {
+    if (realLoading) return;
+    realLoading = true;
+    loadReadOnly().then((snap) => {
+      real = snap;
+      const rt = snap.services.find((x) => x.key === 'realtime');
+      const c = snap.catalog;
+      const cat = c.state === 'ok' ? `${c.lots.length} реални ${c.lots.length === 1 ? 'лот' : 'лота'} в каталога` : c.state === 'empty' ? 'няма публикувани реални лотове' : 'каталогът не е наличен';
+      const summary = `Реални данни, само четене: ${cat}. ${rt?.state === 'ready' ? 'Услугата в реално време отговаря.' : 'Услугата за оферти в реално време още не е готова.'}`;
+      if (summary !== lastRealSummary && route() === 'real') { lastRealSummary = summary; ctrl.david.say(summary, 'system', 'real'); }
+    }).finally(() => { realLoading = false; render(); });
+  }
 
   // ------------------------------------------------------------ viewer (lazy)
   const viewerHost = ref('viewer');
@@ -102,6 +136,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
   });
   ref('pause').addEventListener('click', () => { if (ctrl.david.paused) ctrl.david.resume(); else ctrl.david.pause(); });
   ref('mic').addEventListener('click', () => ctrl.mic.toggle());
+  ref('realRefresh').addEventListener('click', () => refreshReal());
   ref('cta').addEventListener('click', () => ctrl.openConfirm());
   ref('cta2').addEventListener('click', () => ctrl.openConfirm());
   const speakAdvice = ref<HTMLInputElement>('speakAdvice');
@@ -337,7 +372,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
       setText(ref('dPos'), ctrl.leading ? 'Водиш' : top ? 'Не водиш' : '—');
       setText(ref('dMine'), `Приети демо оферти: ${ctrl.attempts.filter((x) => x.status === 'accepted').length}`);
       setText(ref('dVoice'), { off: 'Гласът е изключен', idle: 'Гласът е включен', speaking: 'Говори', paused: 'Гласът е на пауза', unavailable: 'Само надписи' }[vs]);
-      setText(ref('dReal'), `РЕАЛЕН — не е свързан. ${CONFIG.realMode.enabled ? '' : CONFIG.realMode.reason}`);
+      setText(ref('dReal'), 'РЕАЛНИ ДАННИ — само четене. Реалното наддаване е изключено.');
     }
     if (r === 'bids') {
       setHtml(ref('bidsBody'), ctrl.attempts.length ? ctrl.attempts.map((x) => `<tr class="${x.status}"><td>${timeFmt.format(x.at)}</td><td>${formatEur(x.amount)}</td><td>${{ pending: 'Изпраща се', accepted: 'Приета (ДЕМО)', rejected: 'Отказана' }[x.status]}</td><td>${esc(x.message)}</td></tr>`).join('') : '<tr><td colspan="4">Още нямаш оферти.</td></tr>', html);
@@ -345,6 +380,28 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     if (r === 'history') {
       setHtml(ref('log'), ctrl.log.slice(-200).reverse().map((l) => `<li class="${l.kind}"><time>${timeFmt.format(l.at)}</time> ${esc(l.text)}</li>`).join(''), html);
       setHtml(ref('transcript'), d.captions.slice(-200).reverse().map((c2) => `<li class="${c2.kind}"><time>${timeFmt.format(c2.at)}</time> ${esc(c2.text)}</li>`).join(''), html);
+    }
+    if (r === 'real') {
+      const now = Date.now();
+      if (!real) {
+        setText(ref('realChecked'), realLoading ? 'Проверка…' : '—');
+      } else {
+        setHtml(ref('realServices'), real.services.map((x) => `<li class="svc-item" data-state="${x.state}"><span class="svc-dot" aria-hidden="true"></span><span class="svc-name">${esc(SERVICE_BG[x.key])}</span><span class="svc-st">${x.state === 'ready' ? 'Работи' : x.state === 'not_ready' ? 'Не е готова' : 'Няма връзка'}<small>${esc(x.status)}</small></span></li>`).join(''), html);
+        setText(ref('realChecked'), `Проверено в ${timeFmt.format(real.at)} · обновява се на 30 с${realLoading ? ' · проверка…' : ''}`);
+        const c = real.catalog;
+        setText(ref('realCatalogState'), c.reason);
+        ref('realCatalogState').dataset.state = c.state;
+        setHtml(ref('realLots'), c.lots.map((l) => {
+          const cd = lotCountdown(l, now);
+          return `<li class="rlot" data-status="${l.status}"><div class="rlot-top"><span class="rlot-no">${esc(l.lotNumber)}</span><span class="rlot-st">${LOT_STATUS_BG[l.status]}</span></div><b class="rlot-title">${esc(l.title)}</b>${l.subtitle ? `<span class="rlot-sub">${esc(l.subtitle)}</span>` : ''}<div class="rlot-meta"><span>Начална цена: <b>${l.startingPrice === null ? 'не е обявена' : formatEur(l.startingPrice)}</b></span><span>${cd.label}${cd.ms !== null && cd.ms > 0 ? `: <b class="rlot-cd">${formatLong(cd.ms)}</b>` : ''}</span></div></li>`;
+        }).join(''), html);
+        const rt = real.services.find((x) => x.key === 'realtime')!;
+        setText(ref('realBidsText'), rt.state === 'ready'
+          ? 'Услугата в реално време на Enchev Auctions отговаря като готова, но лабораторията още не е свързана с нея: нужни са описание на данните в събитията за оферти и достъп само за четене.'
+          : rt.state === 'not_ready'
+            ? `Няма реални оферти за показване: услугата на Enchev Auctions за оферти и събития в реално време още не е готова (статус: ${rt.status}).`
+            : 'Няма връзка с услугата в реално време на Enchev Auctions, затова няма реални оферти за показване.');
+      }
     }
     if (r === 'settings') setText(ref('audioInfo'), d.audioInfo);
     if (r === 'settings') setText(ref('realReason'), CONFIG.realMode.enabled ? 'конфигуриран' : `не е свързан. ${CONFIG.realMode.reason}`);

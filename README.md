@@ -15,6 +15,7 @@ Desktop and mobile layouts follow the ENCHEV AI Bidder reference concepts (black
 - "Вероятност за успех": **Няма достатъчно данни** — no fabricated percentages, market values or hidden bidders.
 - Bid **confirmation** with consent, live re-validation if the price moves, idempotent submission.
 - DAVID: your own recorded clips per event when added (`public/audio/david/manifest.json`, see [docs/DAVID_AUDIO.md](docs/DAVID_AUDIO.md); none yet), otherwise Bulgarian speech (if the device has a Bulgarian voice), always-on captions, mute, **pause = voice only**, rate; voice commands "цена", "наддай" (opens confirmation only), "пауза", "продължи".
+- **Реални данни (read-only)**: `#/real` shows Enchev Auctions service readiness and verified real lots (with countdowns) through a GET-only, allow-listed bridge (`api/enchev.js`). No real bids exist upstream yet, and real bid submission stays disabled — see [docs/ENCHEV_REAL_DATA.md](docs/ENCHEV_REAL_DATA.md).
 - Connection loss, browser offline, unstable network (drops/reorder/duplicates) with gap detection and resync.
 - 3D viewer (drag/arrow keys) with the original E&A concept model — `TODO`: swap in an approved, licensed vehicle GLB via `lot.modelUrl`.
 - Accessibility: keyboard, focus management, ARIA live regions, reduced motion, high contrast, 44 px targets, safe areas.

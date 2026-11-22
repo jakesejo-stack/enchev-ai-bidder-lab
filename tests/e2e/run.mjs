@@ -409,6 +409,59 @@ await run('DAVID audio slot: your recorded clip plays instead of the synthetic v
   expect((await text(p, 'audioInfo')).includes('1 от 16'), 'settings show 1 of 16 clips');
 });
 
+// Read-only bridge responses shaped exactly like /api/enchev (envelope around the sanitized Enchev body).
+const enchevFixture = (page, { catalogStatus = 200 } = {}) => page.route('**/api/enchev?r=*', (r) => {
+  const res = new URL(r.request().url()).searchParams.get('r');
+  const now = Date.now();
+  const env = (status, body) => ({ readOnly: true, resource: res, upstream: 'https://upstream.test', reachable: true, upstreamStatus: status, fetchedAt: new Date(now).toISOString(), body });
+  const lots = [
+    { id: 'l1', lot_number: 'EA-20001', title: 'BMW 320d Touring', make: 'BMW', model: '320d', model_year: 2019, country_code: 'BG', starting_price: 12500, price_currency: 'EUR', status: 'live', auction_starts_at: new Date(now - 60_000).toISOString(), auction_ends_at: new Date(now + 5 * 60_000).toISOString() },
+    { id: 'l2', lot_number: 'EA-20002', title: 'Škoda Octavia', make: 'Škoda', model: 'Octavia', model_year: 2021, starting_price: 9800, price_currency: 'EUR', status: 'scheduled', auction_starts_at: new Date(now + 26 * 3600_000).toISOString(), auction_ends_at: new Date(now + 27 * 3600_000).toISOString() },
+  ];
+  const map = {
+    catalog: catalogStatus === 200 ? env(200, { ok: true, available: true, realMoneyEnabled: false, lots }) : env(catalogStatus, { ok: false, available: false, lots: [], error: 'Verified catalogue is temporarily unavailable.' }),
+    'health-web': env(200, { ok: true, component: 'web', ready: true, status: 'healthy' }),
+    'health-api': env(200, { ok: true, component: 'api', ready: true, status: 'healthy' }),
+    'health-realtime': env(503, { ok: false, component: 'realtime', ready: false, status: 'service-pending' }),
+    'health-worker': env(503, { ok: false, component: 'worker', ready: false, status: 'service-pending' }),
+  };
+  return r.fulfill({ contentType: 'application/json', body: JSON.stringify(map[res]) });
+});
+
+await run('real data (read-only): Enchev status, real lots with countdowns, no fake bids, bidding stays off', {
+  query: '?seed=3&competitors=0', before: (page) => enchevFixture(page),
+}, async (p) => {
+  const apiCalls = [];
+  p.on('request', (q) => { const u = new URL(q.url()); if (u.pathname.startsWith('/api/')) apiCalls.push(`${q.method()} ${u.pathname}`); });
+  await p.click('.sidenav a[data-nav="real"]');
+  await p.waitForFunction(() => document.querySelectorAll('.rlot').length === 2 && document.querySelectorAll('.svc-item').length === 4, null, { timeout: 8000 });
+  const main = await p.innerText('main');
+  expect(main.includes('САМО ЧЕТЕНЕ'), 'read-only notice');
+  expect(main.replace(/\s/g, '').includes('EA-20001') && main.replace(/\s/g, '').includes('12500€'), 'real lot with its starting price');
+  expect(/Остават:\s*0[45]:\d\d/.test(main), 'countdown to the live lot end');
+  expect(/Започва след:\s*1 д 1[0-9]? ?ч|Започва след:\s*1 д \d+ ч/.test(main), 'countdown to the scheduled lot start');
+  expect(main.includes('service-pending') && main.includes('Не е готова'), 'realtime service shown as not ready');
+  expect(main.includes('Няма реални оферти'), 'no fabricated bids');
+  expect(!(await p.locator('[data-ref="aib"]').isVisible()), 'demo AiBidder hidden on the real data view');
+  await p.waitForFunction(() => window.__bidder.ctrl.david.latest?.text.startsWith('Реални данни'), null, { timeout: 5000 });
+  expect(apiCalls.length >= 5 && apiCalls.every((c) => c.startsWith('GET /api/enchev')), 'only GET /api/enchev: ' + apiCalls.join(', '));
+  await p.screenshot({ path: join(shots, 'desktop-real-data.png') });
+  return `${apiCalls.length} GET`;
+});
+
+await run('real data (phone): unavailable catalogue is explained; 5-item nav fits', {
+  ctx: PHONE(390, 844), query: '?seed=3&competitors=0', before: (page) => enchevFixture(page, { catalogStatus: 503 }),
+}, async (p) => {
+  await p.tap('.bottomnav a[data-nav="real"]');
+  await p.waitForFunction(() => document.querySelector('[data-ref="realCatalogState"]')?.dataset.state === 'unavailable', null, { timeout: 8000 });
+  expect((await text(p, 'realCatalogState')).includes('HTTP 503'), 'reason shows upstream status');
+  const m = await p.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: innerWidth }));
+  expect(m.sw <= m.iw, `no horizontal overflow (${m.sw}/${m.iw})`);
+  const small = await p.evaluate(() => [...document.querySelectorAll('.bottomnav a')].filter((e) => { const r = e.getBoundingClientRect(); return r.height < 44 || r.width < 44; }).length);
+  expect(small === 0, 'nav targets ≥ 44 px');
+  await p.screenshot({ path: join(shots, 'mobile-390-real-data.png'), fullPage: true });
+});
+
 await run('3D viewer: model loads (WebGL), drag rotates without errors', { query: '?seed=3&competitors=0' }, async (p) => {
   await p.waitForFunction(() => document.querySelector('[data-ref="viewer"]').dataset.viewer === 'ready', null, { timeout: 30000 });
   const box = await p.locator('.viewer-canvas').boundingBox();
@@ -424,10 +477,11 @@ await run('real bid endpoint refuses (501) and no request leaves the origin', { 
 });
 
 await run('views: dashboard, AI, bids, history, settings render in Bulgarian', { query: '?seed=3&competitors=0' }, async (p) => {
-  for (const [route, needle] of [['dashboard', 'Табло'], ['ai', 'AiBidder и DAVID'], ['bids', 'Моите оферти'], ['history', 'Транскрипт на DAVID'], ['settings', 'Висок контраст']]) {
+  for (const [route, needle] of [['dashboard', 'Табло'], ['ai', 'AiBidder и DAVID'], ['bids', 'Моите оферти'], ['history', 'Транскрипт на DAVID'], ['real', 'Реални данни'], ['settings', 'Висок контраст']]) {
     await p.click(`.sidenav a[data-nav="${route}"]`);
     await p.waitForFunction((r) => document.documentElement.dataset.route === r, route);
     expect((await p.innerText('main')).includes(needle), `${route} contains ${needle}`);
+    expect(!(await p.locator('.view-live').isVisible()), `${route}: the live demo view is hidden`);
   }
 });
 

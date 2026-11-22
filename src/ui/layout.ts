@@ -8,6 +8,7 @@ const navItems: [string, string, string][] = [
   ['ai', 'chip', 'AI наддаване'],
   ['bids', 'layers', 'Моите оферти'],
   ['history', 'clock', 'История'],
+  ['real', 'wifi', 'Реални данни'],
   ['settings', 'gear', 'Настройки'],
 ];
 const mobileNav: [string, string, string][] = [
@@ -15,6 +16,7 @@ const mobileNav: [string, string, string][] = [
   ['live', 'gavel', 'На живо'],
   ['ai', 'chip', 'AI'],
   ['bids', 'layers', 'Оферти'],
+  ['real', 'wifi', 'Реални'],
 ];
 
 const demoControls = `
@@ -98,7 +100,29 @@ export const APP_HTML = `
         <a class="card dash-card" href="#/live"><h2>Активен демо лот</h2><p class="dash-big" data-ref="dLot">—</p><p data-ref="dPrice">—</p><p data-ref="dTime">—</p><span class="btn sm">Към търга →</span></a>
         <div class="card dash-card"><h2>Твоята позиция</h2><p class="dash-big" data-ref="dPos">—</p><p data-ref="dMine">—</p></div>
         <div class="card dash-card"><h2>DAVID</h2><p class="dash-big" data-ref="dVoice">—</p><p>Надписите са винаги включени.</p></div>
-        <div class="card dash-card"><h2>Режим</h2><p class="dash-big">ДЕМО — активен</p><p data-ref="dReal">РЕАЛЕН — не е свързан</p></div>
+        <a class="card dash-card" href="#/real"><h2>Режим</h2><p class="dash-big">ДЕМО — активен</p><p data-ref="dReal">РЕАЛНИ ДАННИ — само четене</p><span class="btn sm">Реални данни →</span></a>
+      </div>
+    </section>
+
+    <section class="view" data-view="real" aria-labelledby="real-h" hidden>
+      <h1 id="real-h">Реални данни · Enchev Auctions</h1>
+      <p class="real-note" role="note"><b>САМО ЧЕТЕНЕ.</b> Данните идват от публичните услуги на Enchev Auctions. Реалното наддаване е изключено, докато не бъде изрично одобрено.</p>
+      <div class="real-grid">
+        <section class="card" aria-labelledby="rs-h">
+          <div class="real-head"><h2 id="rs-h">Състояние на системата</h2><button type="button" class="btn ghost sm" data-ref="realRefresh">Обнови</button></div>
+          <ul class="svc" data-ref="realServices"></ul>
+          <p class="muted real-checked" data-ref="realChecked">Проверка…</p>
+        </section>
+        <section class="card" aria-labelledby="rl-h">
+          <h2 id="rl-h">Реални лотове</h2>
+          <p class="real-state" data-ref="realCatalogState" role="status">Зареждане…</p>
+          <ul class="real-lots" data-ref="realLots"></ul>
+        </section>
+        <section class="card real-bids" aria-labelledby="rb-h">
+          <h2 id="rb-h">Потвърдени оферти и събития</h2>
+          <p data-ref="realBidsText">Проверка…</p>
+          <p class="muted">DAVID и AiBidder ще работят с реалните оферти, когато Enchev Auctions пусне услугата в реално време и даде достъп само за четене. Изпращането на реални оферти остава изключено.</p>
+        </section>
       </div>
     </section>
 
