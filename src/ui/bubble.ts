@@ -88,6 +88,18 @@ export function mountBubble(bubble: HTMLButtonElement, panel: HTMLElement, onOpe
       panel.style.setProperty('--aib-max', `${Math.round(Math.min(cap, Math.max(220, below)))}px`);
     }
     fit();
+    origin();
+  }
+
+  /** Bubble-style opening: the panel grows as a circle out of the bubble's centre. */
+  function origin(): void {
+    const r = bubble.getBoundingClientRect();
+    const p = panel.getBoundingClientRect();
+    const ox = r.left + r.width / 2 - p.left, oy = r.top + r.height / 2 - p.top;
+    const far = Math.max(...[[0, 0], [p.width, 0], [0, p.height], [p.width, p.height]].map(([x, y]) => Math.hypot(x! - ox, y! - oy)));
+    panel.style.setProperty('--ox', `${Math.round(ox)}px`);
+    panel.style.setProperty('--oy', `${Math.round(oy)}px`);
+    panel.style.setProperty('--or', `${Math.ceil(far + 4)}px`);
   }
 
   /** The panel is only as tall as the active page (capped); longer pages scroll inside. */
@@ -117,9 +129,14 @@ export function mountBubble(bubble: HTMLButtonElement, panel: HTMLElement, onOpe
       for (const o of registry) if (o.el !== bubble && o.api.isOpen) o.api.setOpen(false, false);
       placePanel();
       selectTab(tab, false);
+      origin();
+      panel.classList.remove('pop');
+      void panel.offsetWidth; // restart the opening animation
+      panel.classList.add('pop');
       tabs[tab]!.focus({ preventScroll: true });
-    } else if (returnFocus) {
-      bubble.focus({ preventScroll: true });
+    } else {
+      panel.classList.remove('pop');
+      if (returnFocus) bubble.focus({ preventScroll: true });
     }
     onOpenChange(v);
   }

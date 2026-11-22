@@ -510,3 +510,25 @@ html.hc .demo-strip { background: #000; color: #ffe08a; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------------- round bubbles: circular buttons, panels open like a bubble ---------------- */
+.aib { width: 66px; height: 66px; padding: 0; gap: 1px; border-radius: 50%; flex-direction: column; justify-content: center; }
+.aib .aib-ic { width: 34px; height: 34px; }
+.aib .aib-ic .ic { width: 19px; height: 19px; }
+.aib-name { font-size: .56rem; letter-spacing: .02em; line-height: 1; white-space: nowrap; }
+.aib-dot { top: 5px; left: auto; right: 7px; }
+.aib::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 1px solid rgba(229,55,69,.35); pointer-events: none; }
+.aii::after { border-color: rgba(220,226,236,.28); }
+.aib-panel { border-radius: 30px; }
+.aib-panel.pop { animation: bubble-open .36s cubic-bezier(.2,.9,.25,1.12) both; }
+@keyframes bubble-open {
+  from { clip-path: circle(30px at var(--ox, 50%) var(--oy, 100%)); opacity: .7; }
+  to { clip-path: circle(var(--or, 150%) at var(--ox, 50%) var(--oy, 100%)); opacity: 1; }
+}
+.aib-head { padding: 12px 10px 6px 16px; }
+.aib-tabs { border-radius: 999px; margin: 0 14px; }
+.aib-tabs [role="tab"] { border-radius: 999px; }
+.aib-page { padding: 12px 18px 18px; }
+.aib-kv > div { border-radius: 20px; padding: 9px 14px; }
+.aii-retail { border-radius: 22px; padding: 10px 16px; }
+.aib-page .risk, .prob-pill { border-radius: 999px; }

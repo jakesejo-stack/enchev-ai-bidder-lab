@@ -651,6 +651,16 @@ await run('real bid endpoint refuses (501) and no request leaves the origin', { 
   expect(external.length === 0, 'external requests: ' + external.join(', '));
 });
 
+await run('round bubbles: AiBidder and AI Info are circles; panels open like a bubble from the button', { ctx: PHONE(390, 844), query: '?seed=3&competitors=0' }, async (p) => {
+  const shape = await p.evaluate(() => ['aib', 'aii'].map((k) => { const e = document.querySelector(`[data-ref="${k}"]`); const r = e.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), br: getComputedStyle(e).borderRadius }; }));
+  expect(shape.every((x) => x.w === x.h && x.w >= 44 && x.br === '50%'), `circles: ${JSON.stringify(shape)}`);
+  await p.tap('[data-ref="aib"]');
+  const a = await p.evaluate(() => { const s = getComputedStyle(document.querySelector('[data-ref="aibPanel"]')); return { anim: s.animationName, ox: parseFloat(s.getPropertyValue('--ox')), or: parseFloat(s.getPropertyValue('--or')) }; });
+  expect(a.anim === 'bubble-open' && a.or > 100, `bubble opening: ${JSON.stringify(a)}`);
+  await p.waitForTimeout(500);
+  await p.screenshot({ path: join(shots, 'mobile-390-bubble-open.png') });
+});
+
 await run('views: dashboard, AI, bids, history, settings render in Bulgarian', { query: '?seed=3&competitors=0' }, async (p) => {
   for (const [route, needle] of [['dashboard', 'Табло'], ['ai', 'AiBidder и DAVID'], ['bids', 'Моите оферти'], ['history', 'Транскрипт на DAVID'], ['real', 'Реални данни'], ['settings', 'Висок контраст']]) {
     await p.click(`.sidenav a[data-nav="${route}"]`);
