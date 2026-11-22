@@ -3,13 +3,17 @@ import type { DemoAdapter } from '../adapters/demo-adapter.js';
 import { APP_HTML } from './layout.js';
 import { mountBubble } from './bubble.js';
 import { icon } from './icons.js';
-import { priceChartSvg } from './chart.js';
+import { priceChartSvg, barChartSvg, priceSeriesSvg } from './chart.js';
 import { formatEur } from '../domain/money.js';
 import { formatCountdown } from '../domain/clock.js';
 import { nextValidBid, stepFor } from '../domain/rules.js';
 import { CONFIG } from '../config.js';
 import type { Caption } from '../voice/david.js';
-import { loadReadOnly, lotCountdown, LOT_STATUS_BG, SERVICE_BG, type ReadOnlySnapshot } from '../adapters/enchev-readonly.js';
+import { loadReadOnly, lotCountdown, LOT_STATUS_BG, SERVICE_BG, parseEnvelope, toServiceView, type ReadOnlySnapshot, type ServiceView } from '../adapters/enchev-readonly.js';
+import type { AnalyticsStore, EventRecorder } from '../analytics/store.js';
+import { auctionsCsv, bidsCsv, dayString, rangeFor, summarize, type RangeKind, type Summary } from '../analytics/aggregate.js';
+import { availableSources, defaultSource, demoAllowed, type SourceKind } from '../analytics/sources.js';
+import { generateDemoHistory } from '../analytics/demo-history.js';
 
 const ROUTES = ['live', 'dashboard', 'ai', 'bids', 'history', 'real', 'settings'] as const;
 type Route = (typeof ROUTES)[number];
@@ -32,7 +36,9 @@ function setHtml(el: Element, h: string, cache: Map<Element, string>): void {
   el.innerHTML = h;
 }
 
-export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter | null): void {
+export interface AnalyticsDeps { store: AnalyticsStore; recorder: EventRecorder | null; }
+
+export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter | null, analytics: AnalyticsDeps): void {
   root.innerHTML = APP_HTML;
   const ref = <T extends HTMLElement = HTMLElement>(name: string): T => {
     const el = document.querySelector<T>(`[data-ref="${name}"]`);
@@ -63,6 +69,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     if (focus) document.getElementById('main')?.focus({ preventScroll: false });
     bubble.layout(); // the bid bar shows only on the live view (phones)
     info.layout();
+    syncRealPolling();
     if (r === 'real') {
       if (bubble.isOpen) bubble.setOpen(false, false);
       if (info.isOpen) info.setOpen(false, false);
@@ -75,6 +82,129 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     render();
   }
   addEventListener('hashchange', () => applyRoute(true));
+
+  // ------------------------------------------------------------ analytics dashboard (Табло)
+  const sources = availableSources(CONFIG);
+  let anSource: SourceKind = defaultSource(CONFIG);
+  let anRange: RangeKind = 'live';
+  let anMemo = '';
+  let anSummary: Summary | null = null;
+  let anReal: ServiceView | null = null;
+  let anRealTimer = 0;
+  let anRowsLimit = 15;
+  const anFrom = ref<HTMLInputElement>('anFrom');
+  const anTo = ref<HTMLInputElement>('anTo');
+  anTo.value = dayString(Date.now());
+  anFrom.value = dayString(Date.now() - 6 * 24 * 3600_000);
+  document.querySelectorAll<HTMLButtonElement>('[data-src]').forEach((b) => { if (!sources.includes(b.dataset.src as SourceKind)) b.hidden = true; });
+  const setRadio = (sel: string, attr: string, v: string) => document.querySelectorAll<HTMLElement>(sel).forEach((b) => b.setAttribute('aria-checked', String(b.dataset[attr] === v)));
+  setRadio('[data-src]', 'src', anSource);
+  function refreshRealStatus(): void {
+    fetch('/api/enchev?r=health-realtime', { headers: { Accept: 'application/json' }, cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null)
+      .then((j) => { anReal = toServiceView('realtime', parseEnvelope(j)); anMemo = ''; render(); });
+  }
+  function syncRealPolling(): void {
+    const want = route() === 'dashboard' && anSource === 'real';
+    if (want && !anRealTimer) { refreshRealStatus(); anRealTimer = window.setInterval(refreshRealStatus, 30_000); }
+    if (!want && anRealTimer) { clearInterval(anRealTimer); anRealTimer = 0; }
+  }
+  document.querySelectorAll<HTMLButtonElement>('[data-src]').forEach((b) => b.addEventListener('click', () => {
+    anSource = b.dataset.src as SourceKind; setRadio('[data-src]', 'src', anSource); anMemo = ''; anRowsLimit = 15; syncRealPolling(); render();
+  }));
+  document.querySelectorAll<HTMLButtonElement>('[data-range]').forEach((b) => b.addEventListener('click', () => {
+    anRange = b.dataset.range as RangeKind; setRadio('[data-range]', 'range', anRange); ref('anDates').hidden = anRange !== 'custom'; anMemo = ''; anRowsLimit = 15; render();
+  }));
+  for (const inp of [anFrom, anTo]) for (const ev of ['input', 'change']) inp.addEventListener(ev, () => { anMemo = ''; anRowsLimit = 15; render(); });
+  ref('anRows').addEventListener('click', (e) => {
+    if (!(e.target as Element).closest('[data-an-more]')) return;
+    anRowsLimit += 30; anMemo = ''; render();
+  });
+  function download(name: string, text: string): void {
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+  const csvName = (what: string) => {
+    const r = anSummary!.range;
+    return `enchev-${anSource === 'demo' ? 'DEMO-' : ''}${what}-${anRange}-${dayString(r.from)}_${dayString(r.to)}.csv`;
+  };
+  ref('anCsvAuctions').addEventListener('click', () => { if (anSummary) download(csvName('auctions'), auctionsCsv(anSummary)); });
+  ref('anCsvBids').addEventListener('click', () => {
+    if (anSummary) download(csvName('bids'), bidsCsv(analytics.store.bySource(anSource), anSummary.range, anSource === 'demo' ? analytics.recorder?.live ?? null : null));
+  });
+  ref('anGen').addEventListener('click', () => {
+    if (!demoAllowed(CONFIG) || !ctrl.auction.lot) return;
+    analytics.store.clear(['demo-generated']);
+    analytics.store.add(generateDemoHistory(ctrl.serverNow, ctrl.auction.lot));
+    toast('ДЕМО: добавена примерна история за 30 дни (генерирани данни, не са реални)');
+  });
+  ref('anClear').addEventListener('click', () => {
+    const keep = analytics.recorder?.live ?? null;
+    analytics.store.auctions = analytics.store.auctions.filter((x) => x.source === 'real' || x === keep);
+    analytics.store.changed();
+    toast('ДЕМО историята е изчистена');
+  });
+  const mmss = (ms: number) => formatCountdown(Math.max(0, ms));
+  const dateTime = new Intl.DateTimeFormat('bg-BG', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const dateOnly = new Intl.DateTimeFormat('bg-BG', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const SRC_BADGE = { real: 'реален', 'demo-session': 'ДЕМО', 'demo-generated': 'ДЕМО ген.' } as const;
+  function renderAnalytics(): void {
+    const now = ctrl.serverNow;
+    const live = anSource === 'demo' ? analytics.recorder?.live ?? null : null;
+    const key = `${anSource}|${anRange}|${anFrom.value}|${anTo.value}|${analytics.store.version}|${Math.floor(now / 1000)}|${anReal?.status ?? ''}`;
+    if (key === anMemo) return;
+    anMemo = key;
+    const range = rangeFor(anRange, now, { live, from: anFrom.value, to: anTo.value });
+    const list = analytics.store.bySource(anSource);
+    const s = summarize(list, range, now, live);
+    anSummary = s;
+    // Notes
+    if (anSource === 'demo') {
+      const sess = list.filter((x) => x.source === 'demo-session').length;
+      const gen = list.filter((x) => x.source === 'demo-generated').length;
+      setText(ref('anNote'), `ДЕМО ДАННИ — събития от симулирания сървър, записани на това устройство (пазят се 31 дни). Не са реални търгове. Записани търгове: ${sess} от сесии${gen ? `, ${gen} генерирани` : ''}.`);
+    } else {
+      setText(ref('anNote'), `РЕАЛНИ ДАННИ — само събития, записани от сървъра на Enchev Auctions. ${list.length ? '' : `Към момента няма записани реални събития: регистърът на офертите на Enchev Auctions още не съществува${anReal ? ` (услуга в реално време: ${anReal.state === 'ready' ? 'готова' : anReal.status})` : ''}.`}`);
+    }
+    ref('anNote').dataset.src = anSource;
+    ref('anDemoTools').hidden = anSource !== 'demo' || !demoAllowed(CONFIG);
+    const labelFor = (): string => {
+      if (anRange === 'live') return live ? `LIVE · текущ търг от ${timeFmt.format(live.startedAt)}${live.endedAt ? ' · приключи' : ' · обновява се на живо'}` : 'LIVE · няма търг на живо';
+      if (anRange === '24h') return 'Последните 24 часа (по час)';
+      if (anRange === '7d') return 'Последните 7 дни (по ден)';
+      if (anRange === '30d') return 'Последните 30 дни (по ден)';
+      return `Период ${dateOnly.format(range.from)} – ${dateOnly.format(range.to)}`;
+    };
+    setText(ref('anRangeLabel'), labelFor());
+    // KPIs
+    const dash = anSource === 'real' && !list.length;
+    const kpi = (k: string, v: string, sub: string) => `<div class="an-kpi"><span>${esc(k)}</span><b>${esc(v)}</b><small>${esc(sub)}</small></div>`;
+    const isLive = anRange === 'live';
+    setHtml(ref('anKpis'), [
+      kpi('Оферти', dash ? '—' : String(s.bids), dash ? 'няма данни' : `твои: ${s.myBids}`),
+      kpi('Уникални участници', dash ? '—' : String(s.uniqueBidders), isLive ? 'в текущия търг' : 'за периода'),
+      kpi('Приключили търгове', dash ? '—' : String(s.completed), isLive ? (live?.endedAt ? 'текущият приключи' : 'текущият е на живо') : 'за периода'),
+      kpi('Удължавания на таймера', dash ? '—' : String(s.extensions), 'анти-снайпинг'),
+      kpi('Продължителност', dash ? '—' : isLive ? (s.live ? mmss(s.live.elapsedMs) : '—') : s.avgDurationMs === null ? '—' : mmss(s.avgDurationMs), isLive ? 'досега' : 'средно на търг'),
+      kpi('Ръст на цената', dash ? '—' : isLive ? (s.live ? `+${formatEur(s.live.growth)}` : '—') : s.avgGrowth === null ? '—' : `+${formatEur(s.avgGrowth)}`,
+        isLive ? (s.live ? `${formatEur(s.live.perMinute)}/мин` : '') : s.maxFinal === null ? 'средно от старта' : `средно · най-висока ${formatEur(s.maxFinal)}`),
+    ].join(''), html);
+    // Charts
+    setText(ref('anActTitle'), isLive ? 'Активност на живо (оферти на 10 с)' : s.range.bucketMs < 86_400_000 ? 'Оферти по час' : s.range.bucketMs > 86_400_000 ? 'Оферти по седмица' : 'Оферти по ден');
+    setHtml(ref('anActivity'), barChartSvg(s.activity.map((b) => ({ label: b.label, v: b.bids })), { liveLast: isLive && !!live && !live.endedAt }), html);
+    const daily = !isLive && s.range.bucketMs >= 86_400_000;
+    setText(ref('anPriceTitle'), isLive ? 'Цена на живо' : daily ? 'Средна крайна цена по ден' : 'Крайни цени на приключилите търгове');
+    setHtml(ref('anPrice'), priceSeriesSvg(s.price, isLive ? { step: true, label: (t) => timeFmt.format(t) } : { label: (t) => (daily ? dateOnly.format(t) : dateTime.format(t)) }), html);
+    // Completed auctions (newest first)
+    const shown = s.rows.slice(0, anRowsLimit);
+    setHtml(ref('anRows'), shown.length ? shown.map((x) => `<tr><td data-label="Край">${dateTime.format(x.endedAt!)}</td><td data-label="Лот"><b>${esc(x.title)}</b><small>${esc(x.lotId)}</small></td><td data-label="Продължителност">${mmss(x.durationMs ?? 0)}</td><td data-label="Оферти">${x.bids}</td><td data-label="Участници">${x.bidders}</td><td data-label="Удължавания">${x.extensions}</td><td data-label="Крайна цена">${x.finalPrice === null ? '—' : formatEur(x.finalPrice)}</td><td data-label="Ръст">${x.growth === null ? '—' : '+' + formatEur(x.growth)}</td><td data-label="Източник"><span class="src-badge" data-src="${x.source}">${SRC_BADGE[x.source]}</span></td></tr>`).join('')
+      + (s.rows.length > shown.length ? `<tr class="an-more"><td colspan="9"><button type="button" class="btn ghost sm" data-an-more>Покажи още (${s.rows.length - shown.length})</button> <span class="muted">всички са в CSV</span></td></tr>` : '')
+      : `<tr class="an-empty"><td colspan="9">${dash ? 'Няма записани реални търгове.' : 'Няма приключили търгове за избрания период.'}</td></tr>`, html);
+    ref<HTMLButtonElement>('anCsvAuctions').disabled = !s.rows.length;
+    ref<HTMLButtonElement>('anCsvBids').disabled = !s.bids;
+  }
 
   // ------------------------------------------------------------ real data (read-only bridge)
   let real: ReadOnlySnapshot | null = null;
@@ -406,6 +536,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     // Views
     const r = route();
     if (r === 'dashboard') {
+      renderAnalytics();
       setText(ref('dLot'), lot ? lot.title : '—');
       setText(ref('dPrice'), top ? `Текуща оферта ${formatEur(top.amount)}` : 'Няма оферти');
       setText(ref('dTime'), lot ? (ended ? 'Търгът приключи' : `Остават ${formatCountdown(rem)}`) : '—');

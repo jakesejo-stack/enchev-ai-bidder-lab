@@ -540,6 +540,100 @@ await run('real data (phone): unavailable catalogue is explained; 5-item nav fit
   await p.screenshot({ path: join(shots, 'mobile-390-real-data.png'), fullPage: true });
 });
 
+// ---------------------------------------------------------------- analytics dashboard (Табло)
+const toDashboard = async (p) => { await p.click('.sidenav a[data-nav="dashboard"]'); await p.waitForFunction(() => document.documentElement.dataset.route === 'dashboard'); };
+const kpi = (p, i) => p.locator('.an-kpi b').nth(i).innerText();
+const localDay = (offsetDays) => `(() => { const d = new Date(); d.setDate(d.getDate() + (${offsetDays})); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })()`;
+
+await run('analytics LIVE: KPIs and charts update in realtime from server events', { query: '?seed=3&competitors=0' }, async (p) => {
+  await toDashboard(p);
+  expect((await text(p, 'anNote')).includes('ДЕМО ДАННИ'), 'demo data is labelled');
+  expect((await kpi(p, 0)) === '0', 'no bids yet');
+  await p.evaluate(() => window.__bidder.demo.server.burst(3));
+  await p.waitForFunction(() => document.querySelector('.an-kpi b')?.textContent === '3', null, { timeout: 8000 });
+  expect((await p.locator('[data-ref="anActivity"] rect.bar').count()) > 0, 'activity bars');
+  expect((await p.locator('[data-ref="anPrice"] path.line').count()) === 1, 'live price line');
+  expect((await kpi(p, 5)).startsWith('+'), 'price growth shown');
+  await p.screenshot({ path: join(shots, 'desktop-analytics-live.png') });
+});
+
+await run('analytics 24H: completed auction from server events; CSV export of auctions and bids', { query: '?seed=3&competitors=0' }, async (p) => {
+  await p.evaluate(() => window.__bidder.demo.server.burst(2));
+  await p.waitForFunction(() => window.__bidder.ctrl.auction.bids.length === 2, null, { timeout: 8000 });
+  await p.evaluate(() => window.__bidder.demo.server.endIn(800));
+  await p.waitForFunction(() => window.__bidder.ctrl.ended, null, { timeout: 8000 });
+  await toDashboard(p);
+  await p.click('[data-range="24h"]');
+  await p.waitForFunction(() => document.querySelectorAll('.an-kpi b')[2]?.textContent === '1', null, { timeout: 5000 });
+  expect((await p.locator('[data-ref="anRows"] tr').count()) === 1, 'one completed auction row');
+  const [d1] = await Promise.all([p.waitForEvent('download'), p.click('[data-ref="anCsvAuctions"]')]);
+  const csv1 = readFileSync(await d1.path(), 'utf8');
+  expect(d1.suggestedFilename().startsWith('enchev-DEMO-auctions-24h'), d1.suggestedFilename());
+  expect(csv1.startsWith('\uFEFFid,източник,лот') && csv1.includes('DEMO-0001') && csv1.includes('ДЕМО (сесия)'), 'auctions CSV content');
+  const [d2] = await Promise.all([p.waitForEvent('download'), p.click('[data-ref="anCsvBids"]')]);
+  const lines = readFileSync(await d2.path(), 'utf8').trim().split('\r\n');
+  expect(lines.length === 3, `bids CSV = header + 2 rows (${lines.length})`);
+  return d1.suggestedFilename();
+});
+
+await run('analytics history: generated DEMO history is labelled, dates filter, data is kept after reload', { query: '?seed=3&competitors=0' }, async (p) => {
+  await toDashboard(p);
+  await p.click('[data-ref="anGen"]');
+  await p.click('[data-range="30d"]');
+  const total = Number(await kpi(p, 2));
+  expect(total > 50, `30D completed ${total}`);
+  expect((await p.locator('.src-badge[data-src="demo-generated"]').count()) > 0, 'generated rows are labelled');
+  const y = await p.evaluate(localDay(-1));
+  const expected = await p.evaluate((day) => {
+    const [Y, M, D] = day.split('-').map(Number);
+    const a = new Date(Y, M - 1, D).getTime(), b = new Date(Y, M - 1, D + 1).getTime() - 1;
+    return window.__bidder.analytics.auctions.filter((x) => x.source !== 'real' && x.endedAt !== null && x.endedAt >= a && x.endedAt <= b).length;
+  }, y);
+  await p.click('[data-range="custom"]');
+  await p.fill('[data-ref="anFrom"]', y);
+  await p.fill('[data-ref="anTo"]', y);
+  await p.waitForFunction((n) => document.querySelectorAll('.an-kpi b')[2]?.textContent === String(n), expected, { timeout: 5000 });
+  await p.waitForTimeout(1200); // debounced save
+  await p.reload();
+  await p.waitForFunction(() => window.__bidder?.ctrl.auction.lot, null, { timeout: 15000 });
+  await toDashboard(p);
+  await p.click('[data-range="30d"]');
+  expect(Number(await kpi(p, 2)) >= total, 'history kept after reload');
+  return `30D ${total}, yesterday ${expected}`;
+});
+
+await run('analytics РЕАЛНИ: only real server-recorded events — none exist, so no demo data is shown', {
+  query: '?seed=3&competitors=0', before: (page) => enchevFixture(page),
+}, async (p) => {
+  await p.evaluate(() => window.__bidder.demo.server.burst(2));
+  await toDashboard(p);
+  await p.click('[data-ref="anGen"]');
+  await p.click('[data-src="real"]');
+  await p.waitForFunction(() => document.querySelector('[data-ref="anNote"]').textContent.includes('service-pending'), null, { timeout: 8000 });
+  for (const r of ['live', '24h', '7d', '30d']) {
+    await p.click(`[data-range="${r}"]`);
+    const vals = await p.locator('.an-kpi b').allInnerTexts();
+    expect(vals.every((v) => v === '—'), `${r}: ${vals.join(', ')}`);
+    expect((await p.locator('[data-ref="anCsvAuctions"]').isDisabled()) && (await p.locator('[data-ref="anCsvBids"]').isDisabled()), 'no CSV export of demo data');
+    expect((await p.locator('.src-badge').count()) === 0, 'no demo rows');
+  }
+  expect(!(await p.locator('[data-ref="anDemoTools"]').isVisible()), 'demo tools hidden for real data');
+});
+
+await run('analytics (phone 390): no overflow; filters, CSV and compact list usable', { ctx: PHONE(390, 844), query: '?seed=3&competitors=0' }, async (p) => {
+  await p.tap('.bottomnav a[data-nav="dashboard"]');
+  await p.waitForFunction(() => document.documentElement.dataset.route === 'dashboard');
+  await p.evaluate(() => document.querySelector('[data-ref="anGen"]').click());
+  await p.tap('[data-range="7d"]');
+  await p.waitForTimeout(400);
+  const m = await p.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: innerWidth }));
+  expect(m.sw <= m.iw, `no horizontal overflow (${m.sw}/${m.iw})`);
+  const small = await p.evaluate(() => [...document.querySelectorAll('.an-range button, .an-src button, .an-actions .btn')].filter((e) => { const r = e.getBoundingClientRect(); return r.width && (r.height < 40 || r.width < 40); }).length);
+  expect(small === 0, `${small} tap targets smaller than 40 px`);
+  expect((await p.locator('[data-ref="anRows"] tr').count()) <= 16, 'list is paged on phones');
+  await p.screenshot({ path: join(shots, 'mobile-390-analytics.png') });
+});
+
 await run('3D viewer: model loads (WebGL), drag rotates without errors', { query: '?seed=3&competitors=0' }, async (p) => {
   await p.waitForFunction(() => document.querySelector('[data-ref="viewer"]').dataset.viewer === 'ready', null, { timeout: 30000 });
   expect((await p.getAttribute('[data-ref="viewer"]', 'data-showroom')) === 'podium', 'showroom with podium');

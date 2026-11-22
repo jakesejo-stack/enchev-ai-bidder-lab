@@ -4,6 +4,8 @@ import { DemoAdapter } from './adapters/demo-adapter.js';
 import { Controller } from './app/controller.js';
 import { mountApp } from './ui/render.js';
 import { CONFIG } from './config.js';
+import { AnalyticsStore, EventRecorder } from './analytics/store.js';
+import { demoAllowed } from './analytics/sources.js';
 
 const q = new URLSearchParams(location.search);
 const num = (k: string): number | undefined => (q.has(k) && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : undefined);
@@ -33,9 +35,15 @@ const demo = new DemoAdapter(
   },
 );
 const ctrl = new Controller(demo);
+// Analytics history from the server's auction events. Demo events are recorded ONLY in demo builds.
+const storage = (() => { try { return window.localStorage; } catch { return null; } })();
+const analytics = new AnalyticsStore(storage, () => ctrl.serverNow);
+const recorder = demoAllowed(CONFIG) ? new EventRecorder(analytics, demo.bidderId, 'demo-session') : null;
+if (recorder) ctrl.eventTaps.push((e) => recorder.record(e));
+addEventListener('pagehide', () => analytics.flush());
 const root = document.getElementById('app');
 if (!root) throw new Error('#app missing');
-mountApp(root, ctrl, demo);
+mountApp(root, ctrl, demo, { store: analytics, recorder });
 void ctrl.david.loadClips('/audio/david/manifest.json'); // your own DAVID recordings, if any
 ctrl.start();
-(window as unknown as { __bidder: unknown }).__bidder = { ctrl, demo };
+(window as unknown as { __bidder: unknown }).__bidder = { ctrl, demo, analytics, recorder };

@@ -61,6 +61,8 @@ export class Controller {
   mic: Microphone;
   advice!: Advice;
   private listeners = new Set<() => void>();
+  /** Receives every server event once, in order, after de-duplication (analytics recorder). */
+  readonly eventTaps: ((e: AuctionEvent) => void)[] = [];
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private warned = new Set<number>();
   private lastAdviceAction = '';
@@ -145,7 +147,10 @@ export class Controller {
     this.clock.observeServerTime(e.serverTime, Date.now());
     const r = applyEvent(this.auction, e, Date.now());
     this.auction = r.state;
-    for (const a of r.applied) this.narrate(a, wasLeading, hadLot);
+    for (const a of r.applied) {
+      this.narrate(a, wasLeading, hadLot);
+      for (const tap of this.eventTaps) tap(a);
+    }
     if (this.auction.endsAt !== this.lastEndsAt) {
       // Re-arm time warnings that are now in the future again (after an extension).
       const rem = this.remainingMs;

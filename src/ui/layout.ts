@@ -96,7 +96,51 @@ export const APP_HTML = `
     </section>
 
     <section class="view" data-view="dashboard" aria-labelledby="dash-h" hidden>
-      <h1 id="dash-h">Табло</h1>
+      <div class="an-head">
+        <h1 id="dash-h">Табло · Аналитика</h1>
+        <div class="seg an-src" role="radiogroup" aria-label="Източник на данните">
+          <button type="button" role="radio" aria-checked="true" data-src="demo">ДЕМО</button>
+          <button type="button" role="radio" aria-checked="false" data-src="real">РЕАЛНИ</button>
+        </div>
+      </div>
+      <p class="an-note" data-ref="anNote" role="note">—</p>
+      <div class="an-filters">
+        <div class="seg an-range" role="radiogroup" aria-label="Период">
+          <button type="button" role="radio" aria-checked="true" data-range="live"><span class="an-live-dot" aria-hidden="true"></span>LIVE</button>
+          <button type="button" role="radio" aria-checked="false" data-range="24h">24Ч</button>
+          <button type="button" role="radio" aria-checked="false" data-range="7d">7Д</button>
+          <button type="button" role="radio" aria-checked="false" data-range="30d">30Д</button>
+          <button type="button" role="radio" aria-checked="false" data-range="custom">Период</button>
+        </div>
+        <div class="an-dates" data-ref="anDates" hidden>
+          <label>От <input type="date" data-ref="anFrom"></label>
+          <label>До <input type="date" data-ref="anTo"></label>
+        </div>
+        <div class="an-actions">
+          <button type="button" class="btn ghost sm" data-ref="anCsvAuctions">${icon('layers')}<span>CSV търгове</span></button>
+          <button type="button" class="btn ghost sm" data-ref="anCsvBids">${icon('trend')}<span>CSV оферти</span></button>
+        </div>
+      </div>
+      <p class="an-range-label" data-ref="anRangeLabel" aria-live="polite">—</p>
+      <div class="an-kpis" data-ref="anKpis"></div>
+      <div class="an-charts">
+        <section class="card"><h2>${icon('gavel')} <span data-ref="anActTitle">Активност на наддаването</span></h2><div class="chart-wrap" data-ref="anActivity"></div></section>
+        <section class="card"><h2>${icon('trend')} <span data-ref="anPriceTitle">Ръст на цената</span></h2><div class="chart-wrap" data-ref="anPrice"></div></section>
+      </div>
+      <section class="card an-table-card" aria-labelledby="an-t-h">
+        <h2 id="an-t-h">${icon('clock')} Приключили търгове</h2>
+        <div class="an-table-wrap">
+          <table class="tbl an-table">
+            <thead><tr><th scope="col">Край</th><th scope="col">Лот</th><th scope="col">Продължителност</th><th scope="col">Оферти</th><th scope="col">Участници</th><th scope="col">Удължавания</th><th scope="col">Крайна цена</th><th scope="col">Ръст</th><th scope="col">Източник</th></tr></thead>
+            <tbody data-ref="anRows"></tbody>
+          </table>
+        </div>
+      </section>
+      <div class="an-demo-tools" data-ref="anDemoTools">
+        <button type="button" class="btn ghost sm" data-ref="anGen">Попълни примерна ДЕМО история (30 дни)</button>
+        <button type="button" class="btn ghost sm" data-ref="anClear">Изчисти ДЕМО историята</button>
+      </div>
+      <h2 class="an-sub">Текущо състояние</h2>
       <div class="dash-grid">
         <a class="card dash-card" href="#/live"><h2>Активен демо лот</h2><p class="dash-big" data-ref="dLot">—</p><p data-ref="dPrice">—</p><p data-ref="dTime">—</p><span class="btn sm">Към търга →</span></a>
         <div class="card dash-card"><h2>Твоята позиция</h2><p class="dash-big" data-ref="dPos">—</p><p data-ref="dMine">—</p></div>
