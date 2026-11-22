@@ -52,6 +52,13 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
 
   // ------------------------------------------------------------ viewer (lazy)
   const viewerHost = ref('viewer');
+  // A missing poster must never show a broken-image icon: hide it and keep the gradient backdrop.
+  const poster = viewerHost.querySelector<HTMLImageElement>('.viewer-poster');
+  if (poster) {
+    const hide = () => { poster.hidden = true; };
+    poster.addEventListener('error', hide);
+    if (poster.complete && poster.naturalWidth === 0) hide();
+  }
   let viewerStarted = false;
   function startViewer(url: string): void {
     if (viewerStarted) return;
