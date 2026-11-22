@@ -637,6 +637,8 @@ await run('analytics (phone 390): no overflow; filters, CSV and compact list usa
 await run('3D viewer: model loads (WebGL), drag rotates without errors', { query: '?seed=3&competitors=0' }, async (p) => {
   await p.waitForFunction(() => document.querySelector('[data-ref="viewer"]').dataset.viewer === 'ready', null, { timeout: 30000 });
   expect((await p.getAttribute('[data-ref="viewer"]', 'data-showroom')) === 'podium', 'showroom with podium');
+  expect((await p.getAttribute('[data-ref="viewer"]', 'data-lights')) === 'studio', 'studio lights on the car');
+  expect((await p.locator('.viewer-stage .ls').count()) === 5 && (await p.locator('.viewer-stage .rig').isVisible()), 'showroom wall with light strips and ceiling rig');
   const box = await p.locator('.viewer-canvas').boundingBox();
   await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await p.mouse.down(); await p.mouse.move(box.x + box.width / 2 + 220, box.y + box.height / 2, { steps: 8 }); await p.mouse.up();

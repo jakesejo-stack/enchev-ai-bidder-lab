@@ -72,6 +72,7 @@ export const APP_HTML = `
         </div>
       </div>
       <div class="viewer blk-viewer" data-ref="viewer">
+        <div class="viewer-stage" aria-hidden="true"><i class="rig"></i><i class="ls w1"></i><i class="ls w2"></i><i class="ls r1"></i><i class="ls r2"></i><i class="ls r3"></i></div>
         <img class="viewer-poster" src="/media/demo-car-poster.webp" alt="E&amp;A концептуално купе — демонстрационен модел" width="1200" height="640" decoding="async">
         <span class="viewer-hint" aria-hidden="true">Плъзни, за да завъртиш</span>
         <span class="viewer-tag">ДЕМО КОНЦЕПТ · не е реален автомобил</span>
