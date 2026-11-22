@@ -165,8 +165,7 @@ await run('user limit: over-limit blocks bidding; invalid input is flagged', { q
   await p.fill('[data-ref="cap"]', '42 800');
   await p.press('[data-ref="cap"]', 'Enter');
   await p.waitForFunction(() => window.__bidder.ctrl.blockReason === 'НАД ЛИМИТА ТИ');
-  expect(await p.locator('[data-ref="cta"]').isDisabled(), 'CTA disabled over limit');
-  expect((await text(p, 'risk')) === 'НАД ЛИМИТА', 'risk badge НАД ЛИМИТА');
+  await p.waitForFunction(() => document.querySelector('[data-ref="cta"]').disabled && document.querySelector('[data-ref="risk"]').textContent === 'НАД ЛИМИТА', null, { timeout: 5000 });
   expect((await text(p, 'advHead')).startsWith('Спри'), 'advice says stop');
   await p.fill('[data-ref="cap"]', 'много');
   await p.press('[data-ref="cap"]', 'Enter');
@@ -216,7 +215,7 @@ await run('connection loss: bidding disabled, recovers and resyncs', { query: '?
   await p.waitForFunction(() => document.querySelector('[data-ref="cta"]').disabled && document.querySelector('[data-ref="ctaLabel"]').textContent === 'НЯМА ВРЪЗКА');
   await p.evaluate(() => window.__bidder.demo.server.burst(1)); // happens while we are offline
   await p.waitForFunction(() => window.__bidder.ctrl.connection === 'online', null, { timeout: 8000 });
-  await p.waitForTimeout(800);
+  await p.waitForFunction(() => { const { ctrl, demo } = window.__bidder; const s = demo.server.snapshot(); return ctrl.top.amount === Math.max(...s.bids.map((b) => b.amount)); }, null, { timeout: 10000 });
   const s = await state(p);
   expect(s.top === s.serverTop, 'missed bid recovered via snapshot');
   expect(s.block === null, 'bidding re-enabled');
