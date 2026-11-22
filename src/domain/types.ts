@@ -21,6 +21,12 @@ export interface LotInfo {
   /** True for simulated lots. Demo lots must never be presented as real auctions. */
   demo: boolean;
   modelUrl?: string;
+  /** Full characteristics of the vehicle (all listing fields). */
+  details?: LotSpec[];
+  /** Retail value DECLARED for the lot (seller / listing data) — never our own estimate. */
+  retailValue?: Cents | null;
+  /** Where the retail value comes from, shown next to it. */
+  retailSource?: string;
 }
 
 export interface IncrementBand {

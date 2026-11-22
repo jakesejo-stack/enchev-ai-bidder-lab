@@ -1,12 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DemoAuctionServer } from '../../src/adapters/demo-server.js';
+import { DemoAuctionServer, type Competitor } from '../../src/adapters/demo-server.js';
 import { parseAuctionEvent } from '../../src/adapters/real-adapter.js';
 import { euros } from '../../src/domain/money.js';
-import type { AuctionEvent } from '../../src/domain/types.js';
+import { currentStep, highestBid, nextValidBid } from '../../src/domain/rules.js';
+import type { AuctionEvent, BidRecord } from '../../src/domain/types.js';
 
 function server(now: { t: number }, durationMs = 180_000) {
-  return new DemoAuctionServer({ now: () => now.t, clockSkewMs: 0, durationMs, competitors: false, seed: 1 });
+  return new DemoAuctionServer({ now: () => now.t, clockSkewMs: 0, durationMs, competitors: false, seed: 1, openingBids: true });
 }
 const me = { bidderId: 'me', authenticated: true };
 const req = (eur: number, key: string) => ({ lotId: 'DEMO-0001', amount: euros(eur), currency: 'EUR' as const, idempotencyKey: key });
@@ -60,4 +61,38 @@ test('real adapter rejects malformed stream messages', () => {
   assert.equal(parseAuctionEvent({ type: 'hack', seq: 1, serverTime: 1 }), null);
   assert.ok(parseAuctionEvent({ type: 'bid', seq: 2, serverTime: 1, bid: { bidId: 'x', bidderId: 'y', amount: 100, serverTime: 1 } }));
   assert.ok(parseAuctionEvent({ type: 'status', seq: 3, serverTime: 1, status: 'ended' }));
+});
+
+test('demo server: starts from 0 € by default; the maximum (1 000 000 €) is enforced by the server', () => {
+  const now = { t: 1_000_000 };
+  const s = new DemoAuctionServer({ now: () => now.t, clockSkewMs: 0, competitors: false, seed: 2 });
+  const snap = s.snapshot();
+  assert.ok(snap.type === 'snapshot' && snap.bids.length === 0 && snap.lot.startPrice === 0);
+  assert.equal(nextValidBid(snap.lot, snap.rules, snap.bids), euros(100));
+  assert.equal(s.placeBid(req(1_000_100, 'too-much'), me).status, 'rejected');
+  const r = s.placeBid(req(1_000_000, 'max'), me);
+  assert.equal(r.status, 'accepted', 'exactly the maximum is allowed');
+  s.stop();
+});
+
+test('demo server: competitors bid valid amounts from 0 € and never above their private maximum', () => {
+  const now = { t: 2_000_000 };
+  const s = new DemoAuctionServer({ now: () => now.t, clockSkewMs: 0, competitors: false, seed: 5 });
+  const c: Competitor = { id: 'Участник 3', max: euros(60_000), eagerness: 1 };
+  let other = 0;
+  for (let i = 0; i < 40; i++) {
+    const snap = s.snapshot();
+    if (snap.type !== 'snapshot') throw new Error('snapshot expected');
+    const next = nextValidBid(snap.lot, snap.rules, snap.bids);
+    if (next > c.max) break;
+    const amount = s.competitorAmount(c, next);
+    const step = currentStep(snap.lot, snap.rules, snap.bids);
+    assert.ok(amount >= next && amount <= c.max, `amount ${amount} within [${next}, ${c.max}]`);
+    assert.equal((amount - next) % step, 0, 'on the step grid');
+    now.t += 1_500;
+    assert.equal(s.placeBid({ lotId: snap.lot.lotId, amount, currency: 'EUR', idempotencyKey: `c${i}` }, { bidderId: `p${other++ % 2}`, authenticated: true }).status, 'accepted');
+  }
+  const top = highestBid(s.snapshot().type === 'snapshot' ? (s.snapshot() as { bids: BidRecord[] }).bids : []);
+  assert.ok(top && top.amount > euros(20_000) && top.amount <= c.max, `price rose from 0 € to ${top?.amount}`);
+  s.stop();
 });

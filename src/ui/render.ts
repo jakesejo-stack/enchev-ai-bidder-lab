@@ -3,10 +3,10 @@ import type { DemoAdapter } from '../adapters/demo-adapter.js';
 import { APP_HTML } from './layout.js';
 import { mountBubble } from './bubble.js';
 import { icon } from './icons.js';
-import { priceChartSvg, limitGaugeSvg } from './chart.js';
-import { formatEur, parseEurInput } from '../domain/money.js';
+import { priceChartSvg } from './chart.js';
+import { formatEur } from '../domain/money.js';
 import { formatCountdown } from '../domain/clock.js';
-import { stepFor } from '../domain/rules.js';
+import { nextValidBid, stepFor } from '../domain/rules.js';
 import { CONFIG } from '../config.js';
 import type { Caption } from '../voice/david.js';
 import { loadReadOnly, lotCountdown, LOT_STATUS_BG, SERVICE_BG, type ReadOnlySnapshot } from '../adapters/enchev-readonly.js';
@@ -46,6 +46,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
   const aib = ref<HTMLButtonElement>('aib');
   let lastAction = '';
   const bubble = mountBubble(aib, ref('aibPanel'), (open) => { if (open) delete aib.dataset.new; render(); });
+  const info = mountBubble(ref<HTMLButtonElement>('aii'), ref('aiiPanel'), () => render(), { storeKey: 'enchev-aii-pos-v1', side: 'left' });
 
   // ------------------------------------------------------------ routing
   function route(): Route {
@@ -61,8 +62,10 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     });
     if (focus) document.getElementById('main')?.focus({ preventScroll: false });
     bubble.layout(); // the bid bar shows only on the live view (phones)
+    info.layout();
     if (r === 'real') {
       if (bubble.isOpen) bubble.setOpen(false, false);
+      if (info.isOpen) info.setOpen(false, false);
       refreshReal();
       if (!realTimer) realTimer = window.setInterval(refreshReal, 30_000);
     } else if (realTimer) {
@@ -110,23 +113,6 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
   }
 
   // ------------------------------------------------------------ inputs
-  const capInput = ref<HTMLInputElement>('cap');
-  const capHelp = ref('capHelp');
-  const commitCap = () => {
-    const raw = capInput.value.trim();
-    if (!raw) { ctrl.setCap(null); capInput.removeAttribute('aria-invalid'); setText(capHelp, 'Лимитът е изчистен — AiBidder няма да оценява риска.'); return; }
-    const v = parseEurInput(raw);
-    if (v === null) { capInput.setAttribute('aria-invalid', 'true'); setText(capHelp, 'Въведи сума в евро, напр. 48 000.'); capHelp.classList.add('show'); return; }
-    capInput.removeAttribute('aria-invalid');
-    ctrl.setCap(v);
-    setText(capHelp, `Лимитът е запазен: ${formatEur(v)}.`);
-    capHelp.classList.add('show');
-    setTimeout(() => capHelp.classList.remove('show'), 4000);
-  };
-  capInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); commitCap(); capInput.blur(); } });
-  capInput.addEventListener('change', commitCap);
-  capInput.value = ctrl.cap === null ? '' : String(ctrl.cap / 100);
-
   const rate = ref<HTMLSelectElement>('rate');
   rate.value = String(ctrl.settings.rate);
   rate.addEventListener('change', () => ctrl.setSetting('rate', Number(rate.value)));
@@ -177,6 +163,17 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
   consent.addEventListener('change', () => ctrl.setConsent(consent.checked));
   ref('cfSubmit').addEventListener('click', () => { void ctrl.submitBid(); });
   ref('cfCancel').addEventListener('click', () => ctrl.closeConfirm());
+  dialog.addEventListener('click', (e) => {
+    const b = (e.target as Element).closest<HTMLButtonElement>('[data-raise]');
+    if (!b || !ctrl.confirm.open) return;
+    const step = ctrl.confirmStep ?? 0;
+    const v = b.dataset.raise!;
+    const amount = ctrl.confirm.amount;
+    if (v === 'min') ctrl.setConfirmAmount(ctrl.nextValid ?? amount);
+    else if (v === 'down') ctrl.setConfirmAmount(amount - step);
+    else if (v === 'up') ctrl.setConfirmAmount(amount + step);
+    else ctrl.setConfirmAmount(amount + Number(v));
+  });
   ref('cfX').addEventListener('click', () => ctrl.closeConfirm());
   dialog.addEventListener('cancel', (e) => { e.preventDefault(); ctrl.closeConfirm(); });
   let lastFocus: HTMLElement | null = null;
@@ -240,11 +237,14 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
       setText(ref('lotNo'), `ЛОТ #${lot.lotId}${lot.demo ? ' · ДЕМО' : ''}`);
       setText(ref('lotTitle'), lot.title);
       setText(ref('lotSub'), lot.subtitle);
+      const retail = ref('lotRetail');
+      retail.hidden = !lot.retailValue;
+      if (lot.retailValue) setHtml(retail, `Retail стойност: <b>${formatEur(lot.retailValue)}</b> <span>· ${esc(lot.retailSource ?? 'обявена в лота')}</span>`, html);
       setHtml(ref('specs'), lot.specs.map((s, i) => `<li>${icon(['calendar', 'engine', 'bolt', 'road'][i] ?? 'info')}<span><span class="sr-only">${esc(s.label)}: </span>${esc(s.value)}</span></li>`).join('') + '<li class="spec-note">примерни данни</li>', html);
     }
     const step = lot && rules ? stepFor(top ? top.amount : lot.startPrice, rules) : null;
-    setText(ref('current'), top ? formatEur(top.amount) : '—');
-    setText(ref('currentBy'), top ? (top.bidderId === ctrl.adapter.bidderId ? 'Твоя оферта' : top.bidderId) : 'Няма оферти');
+    setText(ref('current'), top ? formatEur(top.amount) : lot ? formatEur(lot.startPrice) : '—');
+    setText(ref('currentBy'), top ? (top.bidderId === ctrl.adapter.bidderId ? 'Твоя оферта' : top.bidderId) : lot ? `Няма оферти · старт от ${formatEur(lot.startPrice)}` : '');
     setText(ref('next'), next !== null ? formatEur(next) : '—');
     setText(ref('stepLine'), step !== null ? `Стъпка ${formatEur(step)}` : '');
     const statusText = ended ? 'ДЕМО · Търгът приключи' : conn !== 'online' ? 'ДЕМО · Няма връзка — наддаването е спряно' : 'ДЕМО · Активен търг · Наддаване в реално време';
@@ -253,17 +253,14 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
 
     // Timeline (last 6 bids)
     const last6 = a.bids.slice(-6);
-    setHtml(ref('timeline'), last6.map((b, i) => {
+    setHtml(ref('timeline'), !last6.length && lot ? `<li class="tl-empty">Още няма оферти. Търгът започва от ${formatEur(lot.startPrice)}${next !== null ? ` — първата валидна оферта е ${formatEur(next)}` : ''}.</li>` : last6.map((b, i) => {
       const mine = b.bidderId === ctrl.adapter.bidderId;
       const isLast = i === last6.length - 1;
       return `<li class="${isLast ? 'last' : ''}${mine ? ' mine' : ''}"><span class="tl-dot" aria-hidden="true"></span><span class="tl-amt">${formatEur(b.amount)}</span><span class="tl-time">${timeFmt.format(b.serverTime)}</span><span class="tl-who">${mine ? 'Ти' : esc(b.bidderId)}</span></li>`;
     }).join(''), html);
 
     // Chart, gauge, signals
-    setHtml(ref('chart'), priceChartSvg(a.bids, ctrl.cap, ctrl.adapter.bidderId), html);
-    setHtml(ref('gauge'), limitGaugeSvg(adv.limitUse), html);
-    setText(ref('gaugePct'), adv.limitUse === null ? '—' : `${Math.round(adv.limitUse * 100)}%`);
-    setText(ref('gaugeSub'), adv.limitUse === null || next === null || ctrl.cap === null ? 'Задай лимит, за да видиш колко от него ще използва следващата оферта.' : `Следващата оферта ${formatEur(next)} от лимит ${formatEur(ctrl.cap)}`);
+    setHtml(ref('chart'), priceChartSvg(a.bids, null, ctrl.adapter.bidderId), html);
     const sigHtml = adv.signals.map((s) => `<li class="sig ${s.tone}"><span class="sig-l">${esc(s.label)}</span><span class="sig-v">${esc(s.value)}</span></li>`).join('');
     setHtml(ref('signals'), sigHtml, html);
     setHtml(ref('aiSignals'), sigHtml, html);
@@ -300,9 +297,48 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     const risk = ref('risk');
     setText(risk, adv.risk.toUpperCase());
     risk.dataset.level = adv.risk;
-    if (document.activeElement !== capInput) {
-      const v = ctrl.cap === null ? '' : String(ctrl.cap / 100);
-      if (capInput.value.replace(/\s/g, '') !== v) capInput.value = v;
+    // AI Info: the car (all characteristics + declared retail value), live statistics, auction rules
+    if (info.isOpen && lot && rules) {
+      setText(ref('aiiRetail'), lot.retailValue ? formatEur(lot.retailValue) : 'не е обявена');
+      setText(ref('aiiRetailSrc'), lot.retailSource ?? '');
+      const row = (k: string, v: string, cls = '') => `<div${cls ? ` class="${cls}"` : ''}><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`;
+      setHtml(ref('aiiSpecs'), (lot.details ?? lot.specs).map((s) => row(s.label, s.value)).join(''), html);
+      const bids = a.bids;
+      const me = ctrl.adapter.bidderId;
+      const price = top ? top.amount : 0;
+      const sNow = ctrl.serverNow;
+      const lastMin = bids.filter((b) => sNow - b.serverTime <= 60_000).length;
+      const sorted = [...bids].sort((x, y) => x.amount - y.amount);
+      const raises = sorted.slice(1).map((b, i) => b.amount - sorted[i]!.amount);
+      const avgRaise = raises.length ? Math.round(raises.reduce((x, y) => x + y, 0) / raises.length) : null;
+      const lastBid = bids.length ? bids.reduce((x, y) => (y.serverTime > x.serverTime ? y : x)) : null;
+      const st = a.stats;
+      setHtml(ref('aiiStats'), [
+        row('Текуща оферта', formatEur(price), 'hl'),
+        row('Ръст от старта', formatEur(Math.max(0, price - lot.startPrice))),
+        ...(lot.retailValue ? [
+          row('Цена / retail стойност', `${Math.round((price / lot.retailValue) * 100)} %`),
+          row(price <= lot.retailValue ? 'До retail стойността' : 'Над retail стойността', formatEur(Math.abs(lot.retailValue - price))),
+        ] : []),
+        row('Оферти общо', String(bids.length)),
+        row('Участници', String(new Set(bids.map((b) => b.bidderId)).size)),
+        row('Твои приети оферти', String(bids.filter((b) => b.bidderId === me).length)),
+        row('Оферти за последната минута', String(lastMin)),
+        row('Средно повишение', avgRaise === null ? '—' : formatEur(avgRaise)),
+        row('Последна оферта преди', lastBid ? `${Math.max(0, Math.round((sNow - lastBid.serverTime) / 1000))} с` : '—'),
+        row('Удължавания', String(ctrl.extensions)),
+        row('Оставащо време', ended ? 'приключил' : formatCountdown(rem)),
+        row('Връзка', `${conn === 'online' ? 'онлайн' : conn === 'offline' ? 'няма връзка' : 'свързване'} · пресинхронизации ${st.resyncs}`),
+      ].join(''), html);
+      const bands = rules.increments.map((b) => `${b.below === null ? 'над' : 'до'} ${formatEur(b.below ?? rules.increments[rules.increments.length - 2]?.below ?? 0)} → ${formatEur(b.step)}`).join('; ');
+      setHtml(ref('aiiRules'), [
+        row('Режим', 'ДЕМО — симулиран търг', 'hl'),
+        row('Начална цена', formatEur(lot.startPrice)),
+        row('Първа валидна оферта', formatEur(nextValidBid(lot, rules, []))),
+        row('Стъпки на наддаване', bands),
+        row('Удължаване', `оферта в последните ${Math.round(rules.antiSnipingWindowMs / 1000)} с удължава до ${Math.round(rules.extensionMs / 1000)} с след нея`),
+        row('Изпращане на реални оферти', 'изключено'),
+      ].join(''), html);
     }
 
     // Advice
@@ -319,15 +355,16 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     }
     aib.setAttribute('aria-label', `AiBidder — съвети. Риск: ${adv.risk}.${aib.dataset.new ? ' Нов съвет.' : ''}`);
     setText(ref('aibNext'), next !== null ? formatEur(next) : '—');
-    setText(ref('aibCap'), ctrl.cap === null ? 'не е зададен' : formatEur(ctrl.cap));
+    const retailV = lot?.retailValue ?? null;
+    setText(ref('aibRetail'), retailV ? formatEur(retailV) : 'не е обявена');
     const use = adv.limitUse;
     const bar = ref('aibBar');
     bar.style.width = `${use === null ? 0 : Math.min(100, Math.round(use * 100))}%`;
     bar.classList.toggle('over', use !== null && use > 1);
-    setText(ref('aibSub'), ctrl.cap === null || next === null
-      ? 'Задай лимит, за да оцени AiBidder риска.'
-      : next > ctrl.cap ? `Следващата оферта е над лимита ти с ${formatEur(next - ctrl.cap)}.`
-      : `След следващата оферта до лимита остават ${formatEur(ctrl.cap - next)}.`);
+    setText(ref('aibSub'), !retailV || next === null
+      ? 'Лотът няма обявена retail стойност.'
+      : next > retailV ? `Следващата оферта е над обявената retail стойност с ${formatEur(next - retailV)}.`
+      : `Следващата оферта е ${Math.round((next / retailV) * 100)} % от обявената retail стойност.`);
 
     // CTA
     const block = ctrl.blockReason;
@@ -350,13 +387,16 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
       setText(ref('cfAmount2'), formatEur(c.amount));
       setText(ref('cfCurrent'), top ? formatEur(top.amount) : '—');
       setText(ref('cfStep'), step !== null ? formatEur(step) : '—');
-      setText(ref('cfCap'), ctrl.cap === null ? 'не е зададен' : `${formatEur(ctrl.cap)} (остават ${formatEur(Math.max(0, ctrl.cap - c.amount))} след тази оферта)`);
       ref('cfMoved').hidden = !c.priceMoved;
       setText(ref('cfMoved'), `Цената се промени. Новата следваща валидна оферта е ${formatEur(c.amount)} — потвърди отново.`);
       consent.checked = c.consent;
       const err = ref('cfError');
       err.hidden = !c.error;
       setText(err, c.error ?? '');
+      const atMin = next !== null && c.amount <= next;
+      dialog.querySelectorAll<HTMLButtonElement>('[data-raise]').forEach((b) => {
+        b.disabled = c.pending || ((b.dataset.raise === 'down' || b.dataset.raise === 'min') && atMin);
+      });
       const submit = ref<HTMLButtonElement>('cfSubmit');
       submit.disabled = !c.consent || c.pending || !!ctrl.blockReason;
       setText(submit, c.pending ? 'Изпращане…' : 'Потвърди наддаване');

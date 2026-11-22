@@ -98,7 +98,7 @@ const state = (page) => page.evaluate(() => {
 });
 
 // ---------------------------------------------------------------- tests
-await run('desktop: values are consistent (next valid = current + step), countdown runs', { query: '?seed=3&competitors=0' }, async (p) => {
+await run('desktop: values are consistent (next valid = current + step), countdown runs', { query: '?seed=3&competitors=0&opening=1' }, async (p) => {
   const s = await state(p);
   expect(s.next === s.top + 50_000, `next ${s.next} != top ${s.top} + 500 €`);
   expect((await text(p, 'current')).replace(/\s/g, '') === '42500€', 'current tile shows 42 500 €');
@@ -120,7 +120,7 @@ await run('no fabricated success probability anywhere', { query: '?seed=3' }, as
   expect(!/справедлива|пазарна стойност е|висока вероятност/i.test(body), 'no market-value or high-probability claims');
 });
 
-await run('bid flow: CTA → confirmation (consent required) → accepted; you lead', { query: '?seed=3&competitors=0' }, async (p) => {
+await run('bid flow: CTA → confirmation (consent required) → accepted; you lead', { query: '?seed=3&competitors=0&opening=1' }, async (p) => {
   await p.click('[data-ref="cta"]');
   await p.waitForSelector('dialog[open]');
   expect(await p.locator('[data-ref="cfSubmit"]').isDisabled(), 'submit disabled before consent');
@@ -153,7 +153,7 @@ await run('repeated clicks: one idempotent bid only', { query: '?seed=3&competit
   return `accepted=${s.accepted}`;
 });
 
-await run('price moves while confirming → amount updates and consent is required again', { query: '?seed=3&competitors=0' }, async (p) => {
+await run('price moves while confirming → amount updates and consent is required again', { query: '?seed=3&competitors=0&opening=1' }, async (p) => {
   await p.click('[data-ref="cta"]');
   await p.check('[data-ref="consent"]');
   await p.evaluate(() => window.__bidder.demo.server.burst(1));
@@ -164,23 +164,71 @@ await run('price moves while confirming → amount updates and consent is requir
   expect(await p.locator('[data-ref="cfMoved"]').isVisible(), 'price-moved notice visible');
 });
 
-await run('user limit: over-limit blocks bidding; invalid input is flagged', { query: '?seed=3&competitors=0' }, async (p) => {
-  await p.click('[data-ref="aib"]');
-  await p.click('#aib-t2');
-  await p.fill('[data-ref="cap"]', '42 800');
-  await p.press('[data-ref="cap"]', 'Enter');
-  await p.waitForFunction(() => window.__bidder.ctrl.blockReason === 'НАД ЛИМИТА ТИ');
-  await p.waitForFunction(() => document.querySelector('[data-ref="cta"]').disabled && document.querySelector('[data-ref="risk"]').textContent === 'НАД ЛИМИТА', null, { timeout: 5000 });
-  expect((await text(p, 'advHead')).startsWith('Спри'), 'advice says stop');
-  await p.fill('[data-ref="cap"]', 'много');
-  await p.press('[data-ref="cap"]', 'Enter');
-  expect((await p.getAttribute('[data-ref="cap"]', 'aria-invalid')) === 'true', 'aria-invalid on bad input');
-  await p.fill('[data-ref="cap"]', '50000');
-  await p.press('[data-ref="cap"]', 'Enter');
-  await p.waitForFunction(() => window.__bidder.ctrl.blockReason === null);
+await run('auction starts from 0 €: first valid bid is the first increment; a 100 € bid is accepted', { query: '?seed=3&competitors=0' }, async (p) => {
+  expect((await text(p, 'current')).replace(/\s/g, '') === '0€', 'current price 0 €');
+  expect((await text(p, 'next')).replace(/\s/g, '') === '100€', 'first valid bid 100 €');
+  expect((await text(p, 'timeline')).includes('Още няма оферти'), 'empty history explained');
+  await p.click('[data-ref="cta"]');
+  await p.check('[data-ref="consent"]');
+  await p.click('[data-ref="cfSubmit"]');
+  await p.waitForFunction(() => window.__bidder.ctrl.leading && window.__bidder.ctrl.top.amount === 10_000, null, { timeout: 5000 });
 });
 
-await run('rapid incoming bids: UI stays consistent with the server', { query: '?seed=3&competitors=0&latency=20' }, async (p) => {
+await run('competitors raise the price from 0 € with valid bids, not above the declared retail value', { query: '?seed=9&activity=6' }, async (p) => {
+  await p.waitForFunction(() => window.__bidder.ctrl.auction.bids.length >= 6, null, { timeout: 25000 });
+  const r = await p.evaluate(() => {
+    const { ctrl } = window.__bidder;
+    const lot = ctrl.auction.lot, rules = ctrl.auction.rules;
+    const bids = [...ctrl.auction.bids].sort((a, b) => a.serverTime - b.serverTime);
+    const stepFor = (x) => rules.increments.find((b) => b.below === null || x < b.below).step;
+    let prev = null, ok = true;
+    for (const b of bids) {
+      const next = prev === null ? (lot.startPrice > 0 ? lot.startPrice : stepFor(0)) : prev + stepFor(prev);
+      const step = stepFor(prev === null ? lot.startPrice : prev);
+      if (b.amount < next || (b.amount - next) % step !== 0) ok = false;
+      prev = b.amount;
+    }
+    return { ok, n: bids.length, top: prev, retail: lot.retailValue };
+  });
+  expect(r.ok, 'every bid is a valid bid for the moment it was placed');
+  expect(r.top <= r.retail, `top ${r.top} ≤ declared retail ${r.retail}`);
+  return `${r.n} bids, top ${r.top / 100} €`;
+});
+
+await run('confirmation: choose a higher amount (+10 000 €) → consent again → accepted at that amount', { query: '?seed=3&competitors=0&opening=1' }, async (p) => {
+  await p.click('[data-ref="cta"]');
+  await p.check('[data-ref="consent"]');
+  await p.click('[data-raise="1000000"]');
+  await p.waitForFunction(() => document.querySelector('[data-ref="cfAmount"]').textContent.replace(/\s/g, '') === '53000€', null, { timeout: 3000 });
+  expect(!(await p.isChecked('[data-ref="consent"]')), 'consent cleared when the amount changes');
+  expect(!(await p.locator('[data-raise="min"]').isDisabled()), 'can go back to the minimum');
+  await p.click('[data-raise="down"]');
+  await p.waitForFunction(() => document.querySelector('[data-ref="cfAmount"]').textContent.replace(/\s/g, '') === '52500€', null, { timeout: 3000 });
+  await p.check('[data-ref="consent"]');
+  await p.click('[data-ref="cfSubmit"]');
+  await p.waitForFunction(() => window.__bidder.ctrl.leading, null, { timeout: 5000 });
+  const s = await state(p);
+  expect(s.top === 5_250_000, `accepted at 52 500 € (top ${s.top})`);
+});
+
+await run('no personal limit on screen; the 1 000 000 € maximum is enforced only by the server', { query: '?seed=3&competitors=0' }, async (p) => {
+  let visible = await p.evaluate(() => document.body.innerText);
+  await p.click('[data-ref="aib"]');
+  await p.waitForSelector('#aib-panel:not([hidden])');
+  visible += await p.locator('#aib-panel').innerText();
+  await p.click('[data-ref="aii"]');
+  await p.waitForSelector('#aii-panel:not([hidden])');
+  visible += await p.locator('#aii-panel').innerText();
+  await p.click('[data-ref="cta"]');
+  await p.waitForSelector('dialog[open]');
+  visible += await p.locator('dialog').innerText();
+  expect(!/лимит/i.test(visible), 'the word "лимит" appears nowhere on screen');
+  expect(!/1\s?000\s?000/.test(visible), 'the maximum is not shown');
+  const r = await p.evaluate(() => window.__bidder.demo.server.placeBid({ lotId: window.__bidder.ctrl.auction.lot.lotId, amount: 100_010_000, currency: 'EUR', idempotencyKey: 'over-max' }, { bidderId: 'x', authenticated: true }));
+  expect(r.status === 'rejected' && r.code === 'ABOVE_HOUSE_MAX', 'server refuses bids above 1 000 000 €');
+});
+
+await run('rapid incoming bids: UI stays consistent with the server', { query: '?seed=3&competitors=0&latency=20&opening=1' }, async (p) => {
   await p.evaluate(() => { const s = window.__bidder.demo.server; s.burst(5); setTimeout(() => s.burst(5), 300); });
   // Eventual consistency: after the burst the client must converge on the server's highest bid.
   await p.waitForFunction(() => { const { ctrl, demo } = window.__bidder; const s = demo.server.snapshot(); return s.bids.length >= 16 && ctrl.top && ctrl.top.amount === Math.max(...s.bids.map((b) => b.amount)); }, null, { timeout: 20000 });
@@ -192,7 +240,7 @@ await run('rapid incoming bids: UI stays consistent with the server', { query: '
   return `top ${s.top / 100} €`;
 });
 
-await run('unstable network (drops, reorder, duplicates) → gap detection + resync converge', { query: '?seed=5&competitors=0&unstable=1' }, async (p) => {
+await run('unstable network (drops, reorder, duplicates) → gap detection + resync converge', { query: '?seed=5&competitors=0&unstable=1&opening=1' }, async (p) => {
   await p.evaluate(() => { const s = window.__bidder.demo.server; s.burst(5); setTimeout(() => s.burst(5), 2600); });
   await p.waitForFunction(() => { const { ctrl, demo } = window.__bidder; const s = demo.server.snapshot(); return s.bids.length >= 16 && ctrl.top && ctrl.top.amount === Math.max(...s.bids.map((b) => b.amount)); }, null, { timeout: 25000 });
   const s = await state(p);
@@ -200,7 +248,7 @@ await run('unstable network (drops, reorder, duplicates) → gap detection + res
   return `dup=${s.stats.duplicates} buffered=${s.stats.buffered} resyncs=${s.stats.resyncs}`;
 });
 
-await run('lost final event (no later events) is detected via heartbeat and resynced', { query: '?seed=3&competitors=0' }, async (p) => {
+await run('lost final event (no later events) is detected via heartbeat and resynced', { query: '?seed=3&competitors=0&opening=1' }, async (p) => {
   await p.evaluate(() => {
     const { demo } = window.__bidder;
     const realDeliver = demo.deliver.bind(demo);
@@ -214,7 +262,7 @@ await run('lost final event (no later events) is detected via heartbeat and resy
   return `resyncs=${s.stats.resyncs}`;
 });
 
-await run('connection loss: bidding disabled, recovers and resyncs', { query: '?seed=3&competitors=0' }, async (p) => {
+await run('connection loss: bidding disabled, recovers and resyncs', { query: '?seed=3&competitors=0&opening=1' }, async (p) => {
   await p.evaluate(() => window.__bidder.demo.simulateOutage(3000));
   await p.waitForFunction(() => window.__bidder.ctrl.blockReason === 'НЯМА ВРЪЗКА');
   await p.waitForFunction(() => document.querySelector('[data-ref="cta"]').disabled && document.querySelector('[data-ref="ctaLabel"]').textContent === 'НЯМА ВРЪЗКА');
@@ -334,7 +382,7 @@ for (const [w, h] of [[390, 844], [360, 740]]) {
   });
 }
 
-await run('AiBidder bubble (phone): compact non-modal panel, 3 pages, never covers НАДДАЙ', { ctx: PHONE(390, 844), query: '?seed=3&competitors=0' }, async (p) => {
+await run('AiBidder bubble (phone): compact non-modal panel, 2 pages, never covers НАДДАЙ', { ctx: PHONE(390, 844), query: '?seed=3&competitors=0' }, async (p) => {
   expect((await text(p, 'aib')).includes('AiBidder'), 'bubble says AiBidder');
   expect(!(await p.locator('[data-ref="aibPanel"]').isVisible()), 'panel starts closed');
   await p.tap('[data-ref="aib"]');
@@ -350,8 +398,9 @@ await run('AiBidder bubble (phone): compact non-modal panel, 3 pages, never cove
   await p.tap('#aib-t1');
   await p.waitForFunction(() => document.querySelector('#aib-t1').getAttribute('aria-selected') === 'true' && document.querySelector('#aib-p0').inert);
   await p.screenshot({ path: join(shots, 'mobile-390-aibidder.png') });
-  await p.tap('#aib-t2');
-  expect(await p.locator('[data-ref="cap"]').isVisible(), 'limit input on page 3');
+  expect((await p.locator('#aib-panel [role="tab"]').count()) === 2, 'two pages: Съвет · Защо');
+  await p.tap('#aib-t0');
+  expect((await text(p, 'aibRetail')).replace(/\s/g, '').endsWith('€'), 'declared retail value shown');
   // Non-modal: a tap on НАДДАЙ goes through (and closes the panel).
   await p.tap('.bidbar .cta');
   await p.waitForSelector('dialog[open]');
@@ -365,6 +414,33 @@ await run('AiBidder bubble (phone): compact non-modal panel, 3 pages, never cove
   return `panel ${Math.round(panel.height)} px`;
 });
 
+for (const [label, ctx] of [['desktop', DESKTOP], ['phone', PHONE(390, 844)]]) {
+  await run(`AI Info bubble (${label}): car details + declared retail value, live statistics, auction rules; never overlaps AiBidder`, { ctx, query: '?seed=3&competitors=0&opening=1' }, async (p) => {
+    const a = await p.locator('[data-ref="aib"]').boundingBox();
+    const b = await p.locator('[data-ref="aii"]').boundingBox();
+    expect(a && b && (a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y), 'bubbles do not overlap');
+    await p.click('[data-ref="aib"]');
+    await p.waitForSelector('#aib-panel:not([hidden])');
+    await p.click('[data-ref="aii"]');
+    await p.waitForSelector('#aii-panel:not([hidden])');
+    expect(!(await p.locator('#aib-panel').isVisible()), 'only one panel open at a time');
+    const page1 = await p.locator('#aii-p0').innerText();
+    expect(page1.includes('VIN') && page1.includes('Скоростна кутия') && page1.includes('Retail стойност'), 'all characteristics + retail value');
+    expect(page1.includes('примерни ДЕМО данни'), 'retail value is labelled as sample lot data');
+    await p.click('#aii-t1');
+    await p.waitForFunction(() => document.querySelector('#aii-t1').getAttribute('aria-selected') === 'true');
+    const page2 = await p.locator('#aii-p1').innerText();
+    expect(page2.includes('Оферти общо') && /Оферти общо\s*6/.test(page2) && page2.includes('Цена / retail стойност'), 'live statistics');
+    await p.click('#aii-t2');
+    const page3 = await p.locator('#aii-p2').innerText();
+    expect(page3.includes('Начална цена') && page3.replace(/\s/g, '').includes('0€') && page3.includes('изключено'), 'rules: start 0 €, real bids off');
+    const panel = await p.locator('#aii-panel').boundingBox();
+    const vp = p.viewportSize();
+    expect(panel.y >= 0 && panel.y + panel.height <= vp.height && panel.x >= 0 && panel.x + panel.width <= vp.width, 'panel fully on screen');
+    await p.screenshot({ path: join(shots, `${label}-ai-info.png`) });
+  });
+}
+
 await run('AiBidder bubble: drag snaps to the other edge, does not open, position is remembered', { query: '?seed=3&competitors=0' }, async (p) => {
   const b0 = await p.locator('[data-ref="aib"]').boundingBox();
   await p.mouse.move(b0.x + b0.width / 2, b0.y + b0.height / 2);
@@ -375,6 +451,8 @@ await run('AiBidder bubble: drag snaps to the other edge, does not open, positio
   const b1 = await p.locator('[data-ref="aib"]').boundingBox();
   const main = await p.locator('.main').boundingBox();
   expect((await p.getAttribute('[data-ref="aib"]', 'data-side')) === 'left' && Math.abs(b1.x - (main.x + 16)) < 3, `snapped left (x=${Math.round(b1.x)})`);
+  const other = await p.locator('[data-ref="aii"]').boundingBox();
+  expect(b1.y + b1.height <= other.y || other.y + other.height <= b1.y, 'stacked next to AI Info, not on top of it');
   expect((await p.getAttribute('[data-ref="aib"]', 'aria-expanded')) === 'false', 'drag did not open the panel');
   await p.reload();
   await p.waitForFunction(() => window.__bidder?.ctrl.auction.lot);
@@ -464,6 +542,7 @@ await run('real data (phone): unavailable catalogue is explained; 5-item nav fit
 
 await run('3D viewer: model loads (WebGL), drag rotates without errors', { query: '?seed=3&competitors=0' }, async (p) => {
   await p.waitForFunction(() => document.querySelector('[data-ref="viewer"]').dataset.viewer === 'ready', null, { timeout: 30000 });
+  expect((await p.getAttribute('[data-ref="viewer"]', 'data-showroom')) === 'podium', 'showroom with podium');
   const box = await p.locator('.viewer-canvas').boundingBox();
   await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await p.mouse.down(); await p.mouse.move(box.x + box.width / 2 + 220, box.y + box.height / 2, { steps: 8 }); await p.mouse.up();

@@ -9,7 +9,7 @@
 | `/api/bids` | Always `501 REAL_BIDDING_NOT_CONNECTED` | Proxy to the real backend or removed |
 | Real mode | Disabled in `src/config.ts`; UI shows "РЕАЛЕН — не е свързан" | Configure endpoints at build time after review; no API keys in the browser |
 | Real data (read-only) | `#/real` via `api/enchev.js`: Enchev service readiness + verified real lots, GET-only allow-list, no credentials | Bids/events need Enchev's realtime service + a read-only grant + payload schema (docs/ENCHEV_REAL_DATA.md) |
-| AI | Transparent rules over observed events + your limit. No success %, no market value | Only add predictions backed by a validated, documented model |
+| AI | Transparent rules over observed events + the lot's declared retail value (listing data). No success %, no own market estimate | Only add predictions backed by a validated, documented model |
 | Voice | Browser TTS (Bulgarian voice only) + captions; Web Speech recognition for 4 commands | Same; recognition is processed by the browser vendor (e.g. Google in Chrome) |
 
 ## Layers
@@ -34,7 +34,7 @@ heartbeat ahead of `last` twice with nothing buffered → request snapshot (lost
 
 ## Bid arithmetic (`src/domain/rules.ts`)
 
-`next valid = start price` (no bids) or `current + step(current)`; steps come from increment bands.
+`next valid = start price` (no bids; a 0 € start opens at the first increment) or `current + step(current)`; steps come from increment bands. Jump bids must be `next valid + k × step`. The house maximum (1 000 000 € in the demo) is enforced by the server.
 Validation: authenticated, same lot, active and not past `endsAt`, not already highest, `≥ next valid`,
 on step, `≤ house max`. The same function runs in the demo server; **a real backend must enforce its own copy**.
 Anti-sniping: an accepted bid within `antiSnipingWindowMs` of the end moves the end to `acceptedAt + extensionMs`.
@@ -47,10 +47,10 @@ of the device on purpose; tests verify a +60 s skew is corrected.
 
 ## Bid safety
 
-1. The CTA only opens a confirmation dialog (lot, amount = next valid bid, current, step, your limit, fees).
+1. The CTA only opens a confirmation dialog (lot, amount = next valid bid — adjustable to a higher valid amount, current, step, fees).
 2. Consent checkbox is required; if the price moves while open, the amount updates and consent resets.
 3. One idempotency key per dialog: repeated clicks/taps cannot create a second bid (tested).
-4. Disabled when offline, resyncing, ended, not active, unauthenticated, leading, or over your limit.
+4. Disabled when offline, resyncing, ended, not active, unauthenticated, leading, or above the house maximum.
 5. DAVID never bids. The voice command "наддай" only opens the dialog.
 
 ## Connecting a real backend (checklist)

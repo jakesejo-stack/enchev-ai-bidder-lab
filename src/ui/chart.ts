@@ -40,14 +40,3 @@ export function priceChartSvg(bids: readonly BidRecord[], cap: Cents | null, min
 <defs><linearGradient id="area" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#e53745" stop-opacity=".5"/><stop offset="1" stop-color="#e53745" stop-opacity="0"/></linearGradient></defs>
 ${grid.join('')}${capLine}<path d="${area}" fill="url(#area)"/><path d="${line}" class="line"/>${dots}${xl}</svg>`;
 }
-
-/** Semi-circle gauge: how much of the user's limit the next valid bid would use. */
-export function limitGaugeSvg(use: number | null): string {
-  const r = 70, cx = 90, cy = 88;
-  const frac = use === null ? 0 : Math.max(0, Math.min(1, use));
-  const a = Math.PI * (1 - frac);
-  const ex = cx + r * Math.cos(a), ey = cy - r * Math.sin(a);
-  const over = use !== null && use > 1;
-  const arc = frac > 0 ? `<path d="M${cx - r},${cy} A${r},${r} 0 0 1 ${ex.toFixed(1)},${ey.toFixed(1)}" class="g-val${over ? ' over' : ''}"/>` : '';
-  return `<svg class="gauge" viewBox="0 0 180 100" aria-hidden="true"><path d="M${cx - r},${cy} A${r},${r} 0 0 1 ${cx + r},${cy}" class="g-bg"/>${arc}</svg>`;
-}

@@ -5,7 +5,7 @@ import type { AuctionEvent, BidRecord, Cents, ConnectionState } from '../domain/
 import { applyEvent, checkGap, initialAuctionState, type AuctionState } from '../domain/reducer.js';
 import { ServerClock } from '../domain/clock.js';
 import { advise, type Advice } from '../domain/advisor.js';
-import { checkBid, highestBid, nextValidBid } from '../domain/rules.js';
+import { alignBid, checkBid, currentStep, highestBid, nextValidBid } from '../domain/rules.js';
 import { formatEur, speakEur } from '../domain/money.js';
 import { David } from '../voice/david.js';
 import { Microphone, parseCommand } from '../voice/commands.js';
@@ -35,6 +35,10 @@ export interface Settings { speakAdvice: boolean; highContrast: boolean; rate: n
 const STORE_KEY = 'enchev-ai-bidder-lab:v1';
 const THRESHOLDS = [60_000, 30_000, 10_000];
 
+/** No personal limit is shown in this lab: bids may go from 0 € up to the auction maximum (1 000 000 €). */
+export const CAP_MAX: Cents = 100_000_000;
+const validCap = (c: unknown): c is Cents => typeof c === 'number' && Number.isInteger(c) && c >= 0 && c <= CAP_MAX;
+
 function uid(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `k-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
@@ -44,11 +48,13 @@ export class Controller {
   connection: ConnectionState = 'connecting';
   browserOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
   clock = new ServerClock();
-  cap: Cents | null = 4_800_000;
+  cap: Cents | null = null;
   attempts: BidAttempt[] = [];
   log: LogEntry[] = [];
   /** Local time of the last anti-sniping extension (for the УДЪЛЖЕН badge). */
   extendedAt: number | null = null;
+  /** Anti-sniping extensions seen in this auction (for AI Info statistics). */
+  extensions = 0;
   confirm: ConfirmState = { open: false, amount: 0, key: '', consent: false, pending: false, error: null, priceMoved: false };
   settings: Settings = { speakAdvice: false, highContrast: false, rate: 1 };
   david: David;
@@ -118,6 +124,7 @@ export class Controller {
     if (!this.adapter.authenticated) return 'ВЛЕЗ В ПРОФИЛА';
     if (this.leading) return 'ВОДИШ';
     const next = this.nextValid!;
+    if (rules.maxBid !== null && next > rules.maxBid) return 'НАД МАКСИМУМА';
     if (this.cap !== null && next > this.cap) return 'НАД ЛИМИТА ТИ';
     return null;
   }
@@ -145,9 +152,11 @@ export class Controller {
       for (const t of THRESHOLDS) if (rem > t + 1000) this.warned.delete(t);
       this.lastEndsAt = this.auction.endsAt;
     }
-    if (this.confirm.open && this.nextValid !== null && this.nextValid !== this.confirm.amount && !this.confirm.pending) {
-      // Price moved while the dialog was open: require fresh consent for the new amount.
-      this.confirm = { ...this.confirm, amount: this.nextValid, consent: false, priceMoved: true, key: uid(), error: null };
+    if (this.confirm.open && !this.confirm.pending && this.nextValid !== null && this.auction.lot && this.auction.rules) {
+      // Price moved while the dialog was open: if the chosen amount is no longer a valid bid, raise it to
+      // the nearest valid one and require fresh consent for the new amount.
+      const aligned = alignBid(this.confirm.amount, this.nextValid, currentStep(this.auction.lot, this.auction.rules, this.auction.bids));
+      if (aligned !== this.confirm.amount) this.confirm = { ...this.confirm, amount: aligned, consent: false, priceMoved: true, key: uid(), error: null };
     }
     this.refreshAdvice();
     this.notify();
@@ -179,6 +188,7 @@ export class Controller {
         if (e.byMs > 0) {
           const s = Math.round(e.byMs / 1000);
           this.extendedAt = Date.now();
+          this.extensions++;
           this.log.push({ at, text: `Търгът е удължен с ${s} с (оферта в последните секунди)`, kind: 'status' });
           this.david.say(`Търгът е удължен с ${s} секунди.`, 'alert', 'ext', 'extended');
         } else {
@@ -256,6 +266,7 @@ export class Controller {
 
   // ---------------------------------------------------------------- user actions
   setCap(c: Cents | null): void {
+    if (c !== null && !validCap(c)) return;
     this.cap = c;
     this.save();
     this.log.push({ at: this.serverNow, text: c === null ? 'Лимитът е изчистен' : `Лимитът е зададен на ${formatEur(c)}`, kind: 'system' });
@@ -280,6 +291,22 @@ export class Controller {
     if (this.confirm.pending) return;
     this.confirm = { ...this.confirm, open: false };
     this.notify();
+  }
+
+  /** Choose the bid amount in the open confirmation (rounded up to a valid bid). Consent must be given again. */
+  setConfirmAmount(amount: Cents): void {
+    const c = this.confirm;
+    const { lot, rules, bids } = this.auction;
+    if (!c.open || c.pending || !lot || !rules || this.nextValid === null) return;
+    const aligned = alignBid(Math.min(amount, rules.maxBid ?? amount), this.nextValid, currentStep(lot, rules, bids));
+    if (aligned === c.amount) return;
+    this.confirm = { ...c, amount: aligned, consent: false, priceMoved: false, key: uid(), error: null };
+    this.notify();
+  }
+
+  get confirmStep(): Cents | null {
+    const { lot, rules, bids } = this.auction;
+    return lot && rules ? currentStep(lot, rules, bids) : null;
   }
 
   setConsent(v: boolean): void { this.confirm = { ...this.confirm, consent: v, priceMoved: v ? false : this.confirm.priceMoved }; this.notify(); }
@@ -337,7 +364,7 @@ export class Controller {
         break;
       case 'pause_voice': this.david.pause(); break;
       case 'resume_voice': this.david.resume(); break;
-      case 'limit': this.david.say('Можеш да промениш лимита в полето „Твоят лимит“.', 'event'); break;
+      case 'limit': this.david.say('В тази версия няма личен лимит: можеш да наддаваш от 0 до 1 000 000 евро.', 'event'); break;
       default: this.david.say('Не разбрах командата. Опитай: „цена“, „наддай“, „пауза“.', 'event');
     }
   }
@@ -348,7 +375,7 @@ export class Controller {
       const raw = localStorage.getItem(STORE_KEY);
       if (!raw) return;
       const v = JSON.parse(raw) as { cap?: number | null; settings?: Partial<Settings> };
-      if (v.cap === null || (typeof v.cap === 'number' && Number.isInteger(v.cap) && v.cap > 0)) this.cap = v.cap;
+      // The personal limit is no longer shown, so a limit saved by an older version is ignored.
       if (v.settings) this.settings = { ...this.settings, ...v.settings };
     } catch { /* storage unavailable */ }
   }

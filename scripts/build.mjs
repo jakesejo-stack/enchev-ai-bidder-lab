@@ -43,12 +43,16 @@ if (!existsSync(join(dist, 'fonts/montserrat-var.woff'))) {
 
 const esbuild = await loadEsbuild();
 const three = threeDir();
+// The Porsche demo lot switches on automatically once its approved GLB is added to the repo.
+const porscheGlb = existsSync(join(root, 'public/models/porsche-911-gt3.glb'));
+console.log(`model: ${porscheGlb ? 'Porsche 911 GT3 GLB (public/models/porsche-911-gt3.glb)' : 'E&A concept (no Porsche GLB yet)'}`);
 const result = await esbuild.build({
   entryPoints: { app: join(root, 'src/main.ts') },
   bundle: true, splitting: true, format: 'esm', target: ['es2020', 'safari15'], minify: true, sourcemap: 'linked',
   outdir: join(dist, 'assets'), entryNames: '[name]-[hash]', chunkNames: 'chunk-[hash]',
   alias: { three: join(three, 'build/three.module.js'), 'three/examples': join(three, 'examples') },
   metafile: true, legalComments: 'linked', logLevel: 'warning',
+  define: { __PORSCHE_GLB__: JSON.stringify(porscheGlb) },
 });
 const entry = Object.entries(result.metafile.outputs).find(([, o]) => o.entryPoint && o.entryPoint.endsWith('src/main.ts'));
 if (!entry) throw new Error('entry output not found');

@@ -68,6 +68,7 @@ export const APP_HTML = `
           <h1 id="lot-title" data-ref="lotTitle">Зареждане…</h1>
           <p class="lot-sub" data-ref="lotSub"></p>
           <ul class="specs" data-ref="specs" aria-label="Примерни характеристики"></ul>
+          <p class="lot-retail" data-ref="lotRetail" hidden></p>
         </div>
       </div>
       <div class="viewer blk-viewer" data-ref="viewer">
@@ -130,7 +131,7 @@ export const APP_HTML = `
       <h1 id="ai-h">AI наддаване — AiBidder и DAVID</h1>
       <div class="card prose">
         <h2>AiBidder — съвети</h2>
-        <p>AiBidder (балончето в ъгъла) използва <b>само</b> данните, които се виждат в търга: подадените оферти, стъпката, оставащото време и <b>твоя лимит</b>. Не оценява пазарна стойност, не измисля участници и не показва „вероятност за успех“ — за това няма валидиран модел.</p>
+        <p>AiBidder (балончето в ъгъла) използва <b>само</b> данните, които се виждат в търга: подадените оферти, стъпката, оставащото време и <b>обявената в лота retail стойност</b> (данни на лота, не наша оценка). Не оценява пазарна стойност, не измисля участници и не показва „вероятност за успех“ — за това няма валидиран модел.</p>
         <h2>DAVID — гласът на търга</h2>
         <p>DAVID съобщава събитията: нови оферти, удължаване, оставащо време и край. Може да пуска собствени аудио записи; без тях използва български синтезиран глас или само надписи.</p>
         <p>Нито AiBidder, нито DAVID <b>наддават вместо теб</b>. Бутонът „Наддай“ и гласовата команда „наддай“ само отварят потвърждение, в което проверяваш сумата и потвърждаваш ръчно.</p>
@@ -228,7 +229,6 @@ export const APP_HTML = `
   <div class="aib-tabs" role="tablist" aria-label="AiBidder">
     <button type="button" role="tab" id="aib-t0" aria-controls="aib-p0" aria-selected="true" data-tab="0">Съвет</button>
     <button type="button" role="tab" id="aib-t1" aria-controls="aib-p1" aria-selected="false" tabindex="-1" data-tab="1">Защо</button>
-    <button type="button" role="tab" id="aib-t2" aria-controls="aib-p2" aria-selected="false" tabindex="-1" data-tab="2">Лимит</button>
   </div>
   <div class="aib-pages" data-ref="aibPages">
     <div class="aib-page" role="tabpanel" id="aib-p0" aria-labelledby="aib-t0">
@@ -236,10 +236,11 @@ export const APP_HTML = `
       <p class="adv-headline" data-ref="advHead">—</p>
       <dl class="aib-kv">
         <div><dt>Следваща оферта</dt><dd data-ref="aibNext">—</dd></div>
-        <div><dt>Твоят лимит</dt><dd><span data-ref="aibCap">—</span> <button type="button" class="linkish" data-goto="2">Промени</button></dd></div>
+        <div><dt>Retail стойност (обявена)</dt><dd data-ref="aibRetail">—</dd></div>
       </dl>
       <div class="aib-bar" aria-hidden="true"><i data-ref="aibBar"></i></div>
       <p class="aib-sub" data-ref="aibSub"></p>
+      <label class="check aib-speak"><input type="checkbox" data-ref="speakAdvice"> Изговаряй съветите (с гласа на DAVID)</label>
     </div>
     <div class="aib-page" role="tabpanel" id="aib-p1" aria-labelledby="aib-t1">
       <ul class="adv-reasons" data-ref="advReasons"></ul>
@@ -249,16 +250,34 @@ export const APP_HTML = `
         <button type="button" class="linkish" data-ref="probWhy" aria-expanded="false" aria-controls="prob-why">Защо?</button></p>
       <p class="prob-why" id="prob-why" data-ref="probWhyText" hidden></p>
     </div>
-    <div class="aib-page" role="tabpanel" id="aib-p2" aria-labelledby="aib-t2">
-      <label class="aib-label" for="cap">Твоят лимит</label>
-      <div class="cap-dd"><input id="cap" data-ref="cap" inputmode="numeric" autocomplete="off" enterkeyhint="done" aria-describedby="cap-help"><span aria-hidden="true">€</span></div>
-      <p id="cap-help" class="cap-help" data-ref="capHelp">Максималната сума, която си готов да платиш. Enter, за да запазиш.</p>
-      <div class="gauge-wrap">
-        <div data-ref="gauge"></div>
-        <div class="gauge-text"><strong data-ref="gaugePct">—</strong><span>ОТ ЛИМИТА ТИ</span></div>
-        <p class="gauge-sub" data-ref="gaugeSub"></p>
-      </div>
-      <label class="check"><input type="checkbox" data-ref="speakAdvice"> Изговаряй съветите (с гласа на DAVID)</label>
+  </div>
+</section>
+
+<button type="button" class="aib aii" data-ref="aii" aria-expanded="false" aria-controls="aii-panel" aria-label="AI Info — колата и статистика">
+  <span class="aib-ic info" aria-hidden="true">${icon('gauge')}</span><span class="aib-name">AI Info</span>
+</button>
+<section class="aib-panel" id="aii-panel" data-ref="aiiPanel" role="dialog" aria-modal="false" aria-labelledby="aii-h" hidden>
+  <header class="aib-head">
+    <span class="aib-ic sm info" aria-hidden="true">${icon('gauge')}</span>
+    <h2 id="aii-h">AI Info</h2>
+    <span class="aib-demo">ДЕМО</span>
+    <button type="button" class="aib-x" aria-label="Затвори AI Info">${icon('close')}</button>
+  </header>
+  <div class="aib-tabs" role="tablist" aria-label="AI Info">
+    <button type="button" role="tab" id="aii-t0" aria-controls="aii-p0" aria-selected="true" data-tab="0">Кола</button>
+    <button type="button" role="tab" id="aii-t1" aria-controls="aii-p1" aria-selected="false" tabindex="-1" data-tab="1">Статистика</button>
+    <button type="button" role="tab" id="aii-t2" aria-controls="aii-p2" aria-selected="false" tabindex="-1" data-tab="2">Търг</button>
+  </div>
+  <div class="aib-pages">
+    <div class="aib-page" role="tabpanel" id="aii-p0" aria-labelledby="aii-t0">
+      <div class="aii-retail"><span>Retail стойност</span><b data-ref="aiiRetail">—</b><small data-ref="aiiRetailSrc"></small></div>
+      <dl class="aii-list" data-ref="aiiSpecs"></dl>
+    </div>
+    <div class="aib-page" role="tabpanel" id="aii-p1" aria-labelledby="aii-t1">
+      <dl class="aii-list" data-ref="aiiStats"></dl>
+    </div>
+    <div class="aib-page" role="tabpanel" id="aii-p2" aria-labelledby="aii-t2">
+      <dl class="aii-list" data-ref="aiiRules"></dl>
     </div>
   </div>
 </section>
@@ -273,9 +292,15 @@ export const APP_HTML = `
       <div class="cf-amount"><dt>Твоята оферта</dt><dd data-ref="cfAmount">—</dd></div>
       <div><dt>Текуща най-висока</dt><dd data-ref="cfCurrent">—</dd></div>
       <div><dt>Стъпка</dt><dd data-ref="cfStep">—</dd></div>
-      <div><dt>Твоят лимит</dt><dd data-ref="cfCap">—</dd></div>
       <div><dt>Такси</dt><dd>Няма данни в демо режим. В реален търг таксите се показват тук преди потвърждение.</dd></div>
     </dl>
+    <div class="cf-adjust" role="group" aria-label="Промени сумата на офертата">
+      <button type="button" class="btn ghost sm" data-raise="down" aria-label="Една стъпка надолу">− стъпка</button>
+      <button type="button" class="btn ghost sm" data-raise="up" aria-label="Една стъпка нагоре">+ стъпка</button>
+      <button type="button" class="btn ghost sm" data-raise="100000">+1 000 €</button>
+      <button type="button" class="btn ghost sm" data-raise="1000000">+10 000 €</button>
+      <button type="button" class="btn ghost sm" data-raise="min">Мин.</button>
+    </div>
     <p class="cf-moved" data-ref="cfMoved" role="status" hidden></p>
     <label class="consent"><input type="checkbox" data-ref="consent"> <span>Потвърждавам оферта от <b data-ref="cfAmount2">—</b>. Разбирам, че в реален търг офертата е обвързваща.</span></label>
     <p class="cf-error" data-ref="cfError" role="alert" hidden></p>

@@ -1,6 +1,7 @@
-// Interactive 3D lot viewer (drag / swipe / arrow keys to rotate). Loaded lazily.
-// Shows the ORIGINAL E&A concept model. TODO(approved-asset): when an approved, commercially
-// licensed vehicle GLB exists, set lot.modelUrl to it — nothing else needs to change.
+// Interactive 3D showroom (drag / swipe / arrow keys to rotate). Loaded lazily.
+// The car stands on a glowing turntable podium in a dark showroom. Any GLB works: it is
+// auto-scaled to car size and placed on the podium (lot.modelUrl). The Porsche demo lot uses
+// public/models/porsche-911-gt3.glb once that approved file is added; otherwise the original E&A model.
 // Never leaves a black box: any WebGL failure, context loss or load error shows the poster image.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -19,6 +20,56 @@ function normalise(obj, length) {
   const c = box.getCenter(new THREE.Vector3());
   obj.position.x -= c.x; obj.position.z -= c.z; obj.position.y -= box.min.y;
   return obj;
+}
+
+/** Soft red ring for the floor glow around the podium (additive). */
+function haloTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const r = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  r.addColorStop(0, 'rgba(229,55,69,0)');
+  r.addColorStop(0.66, 'rgba(229,55,69,0)');
+  r.addColorStop(0.74, 'rgba(255,70,85,0.95)');
+  r.addColorStop(0.82, 'rgba(229,55,69,0.35)');
+  r.addColorStop(1, 'rgba(229,55,69,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 256, 256);
+  return new THREE.CanvasTexture(c);
+}
+
+/** Showroom: curved dark backdrop with LED strips, glossy floor, podium with glowing rings. */
+function buildShowroom(scene) {
+  const PODIUM_R = 3.0, PODIUM_H = 0.22;
+  const glow = (color) => new THREE.MeshBasicMaterial({ color, toneMapped: false });
+  const backdrop = new THREE.Mesh(
+    new THREE.CylinderGeometry(10, 10, 7, 64, 1, true, Math.PI / 2, Math.PI),
+    new THREE.MeshStandardMaterial({ color: 0x0b0c10, roughness: 0.92, metalness: 0.1, side: THREE.BackSide }),
+  );
+  backdrop.position.set(0, 3.2, 0);
+  scene.add(backdrop);
+  for (const [x, color] of [[-5.2, 0xe53745], [0, 0xd8dde6], [5.2, 0xe53745]]) {
+    const z = -Math.sqrt(Math.max(0, 9.9 * 9.9 - x * x));
+    const strip = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 4.2), glow(color));
+    strip.position.set(x, 3.0, z); strip.lookAt(0, 3.0, 0);
+    const bloom = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 4.6), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.09, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    bloom.position.copy(strip.position); bloom.position.multiplyScalar(0.995); bloom.lookAt(0, 3.0, 0);
+    scene.add(strip, bloom);
+  }
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(PODIUM_R + 0.12, PODIUM_R + 0.25, PODIUM_H, 96), new THREE.MeshStandardMaterial({ color: 0x101217, roughness: 0.3, metalness: 0.85 }));
+  base.position.y = PODIUM_H / 2;
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(PODIUM_R + 0.19, PODIUM_R + 0.21, 0.035, 96, 1, true), glow(0xff3344));
+  band.position.y = PODIUM_H * 0.42;
+  const topRing = new THREE.Mesh(new THREE.TorusGeometry(PODIUM_R + 0.1, 0.022, 8, 160), glow(0xff4455));
+  topRing.rotation.x = Math.PI / 2; topRing.position.y = PODIUM_H + 0.004;
+  const footRing = new THREE.Mesh(new THREE.TorusGeometry(PODIUM_R + 0.27, 0.018, 8, 160), glow(0xff2a3a));
+  footRing.rotation.x = Math.PI / 2; footRing.position.y = 0.012;
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(9.4, 9.4), new THREE.MeshBasicMaterial({ map: haloTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+  halo.rotation.x = -Math.PI / 2; halo.position.y = 0.006;
+  scene.add(base, band, topRing, footRing, halo);
+  // The top disc turns with the car (turntable); everything above is static.
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(PODIUM_R, 96), new THREE.MeshStandardMaterial({ color: 0x1a1d24, roughness: 0.22, metalness: 0.55 }));
+  disc.rotation.x = -Math.PI / 2; disc.position.y = PODIUM_H + 0.002;
+  return { height: PODIUM_H, disc, halo, band, rings: [topRing, footRing] };
 }
 
 function shadowTexture() {
@@ -61,12 +112,13 @@ export function mountViewer(host, opts) {
   scene.environmentIntensity = 0.6;
   const camera = new THREE.PerspectiveCamera(30, 16 / 9, 0.1, 100);
 
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(14, 64), new THREE.MeshStandardMaterial({ color: 0x0c0d11, roughness: 0.45, metalness: 0.3 }));
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(14, 64), new THREE.MeshStandardMaterial({ color: 0x090a0e, roughness: 0.28, metalness: 0.55 }));
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
+  const showroom = buildShowroom(scene);
+  host.dataset.showroom = 'podium';
   const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false }));
-  shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.003; shadow.scale.set(3.2, 5.6, 1);
-  scene.add(shadow);
+  shadow.rotation.x = -Math.PI / 2; shadow.position.y = showroom.height + 0.006; shadow.scale.set(3.2, 5.6, 1);
   scene.add(new THREE.HemisphereLight(0x9aa3b5, 0x050507, 0.35));
   const spot = (color, intensity, pos) => {
     const l = new THREE.SpotLight(color, intensity, 0, 0.5, 0.8, 2);
@@ -74,11 +126,16 @@ export function mountViewer(host, opts) {
     scene.add(l, l.target);
   };
   spot(0xffffff, 300, [4, 7, 5]);
+  spot(0xffffff, 260, [0, 9, 0.5]);
   spot(0xe53745, 520, [-6, 2.5, -4]);
   spot(0xc6d6ff, 260, [6, 3, -5]);
 
   const turntable = new THREE.Group();
+  turntable.add(showroom.disc, shadow);
   scene.add(turntable);
+  const car = new THREE.Group();
+  car.position.y = showroom.height;
+  turntable.add(car);
   let yaw = -0.55, velocity = 0, dragging = false, lastX = 0, lastInput = 0, visible = true, raf = 0, dirty = true, destroyed = false, lastFrame = 0;
   // Phones / low-core devices: 30 fps is plenty for a turntable and keeps the main thread free for live bids.
   const minFrameMs = matchMedia('(pointer: coarse)').matches || (navigator.hardwareConcurrency || 8) <= 4 ? 33 : 0;
@@ -87,10 +144,10 @@ export function mountViewer(host, opts) {
     const w = host.clientWidth || 1, h = host.clientHeight || 1;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    // Fit the 4.6 m car: closer on wide frames, further on narrow ones.
-    const dist = camera.aspect < 1.2 ? 8.4 : camera.aspect < 1.9 ? 7.0 : 6.3;
-    camera.position.set(0, 1.45, dist);
-    camera.lookAt(0, 0.5, 0);
+    // Fit the 4.6 m car on its 6 m podium: closer on wide frames, further on narrow ones.
+    const dist = camera.aspect < 1.2 ? 10.2 : camera.aspect < 1.9 ? 8.6 : 7.6;
+    camera.position.set(0, 2.15, dist);
+    camera.lookAt(0, 0.62, 0);
     camera.updateProjectionMatrix();
     dirty = true; loop();
   }
@@ -111,6 +168,12 @@ export function mountViewer(host, opts) {
     const auto = idle && !opts.reducedMotion;
     if (auto) yaw += 0.0025;
     turntable.rotation.y = yaw;
+    if (!opts.reducedMotion) {
+      // Gentle "breathing" of the podium light.
+      const p = 0.78 + 0.22 * Math.sin(t / 700);
+      showroom.halo.material.opacity = p;
+      showroom.band.material.color.setRGB(1, 0.2 * p, 0.27 * p);
+    }
     renderer.render(scene, camera);
     dirty = false;
     if (auto || velocity !== 0 || dragging) loop();
@@ -146,7 +209,7 @@ export function mountViewer(host, opts) {
   state('loading');
   new GLTFLoader().loadAsync(opts.modelUrl).then((gltf) => {
     if (destroyed) return;
-    turntable.add(normalise(gltf.scene, 4.6));
+    car.add(normalise(gltf.scene, 4.6));
     resize();
     state('ready');
   }).catch((err) => state('fallback', 'model: ' + (err && err.message)));

@@ -1,12 +1,13 @@
-// DAVID's guidance: transparent signals computed ONLY from the observed event stream and the
-// user's own limit. No market values, no hidden bidders, no success percentages — there is no
-// validated model behind such numbers, so the UI states "Няма достатъчно данни" instead.
+// AiBidder's guidance: transparent signals computed ONLY from the observed event stream, the user's
+// own limit if one is set, and otherwise the retail value DECLARED in the lot (listing data, never our
+// estimate). No market predictions, no hidden bidders, no success percentages — there is no validated
+// model behind such numbers, so the UI states "Няма достатъчно данни" instead.
 import type { BidRecord, Cents, ConnectionState } from './types.js';
 import type { AuctionState } from './reducer.js';
 import { highestBid, nextValidBid, stepFor } from './rules.js';
 import { formatEur } from './money.js';
 
-export type RiskLevel = 'нисък' | 'умерен' | 'висок' | 'над лимита' | 'няма данни';
+export type RiskLevel = 'нисък' | 'умерен' | 'висок' | 'над лимита' | 'над retail' | 'няма данни';
 export type AdviceAction = 'wait_leading' | 'can_bid' | 'stop_over_limit' | 'offline' | 'ended' | 'not_ready' | 'set_limit';
 export type Tone = 'ok' | 'warn' | 'bad' | 'info';
 
@@ -19,8 +20,10 @@ export interface Advice {
   reasons: string[];
   signals: Signal[];
   nextValid: Cents | null;
-  /** Fraction of the user's limit that the next valid bid would use (0..∞), null if no limit. */
+  /** Next valid bid as a fraction of the reference (the user's limit, else the declared retail value). */
   limitUse: number | null;
+  /** What limitUse is measured against. */
+  reference: 'limit' | 'retail' | null;
   probabilityText: string;
   probabilityWhy: string;
 }
@@ -44,7 +47,7 @@ export function advise({ auction, cap, myBidderId, serverNow, connection }: Advi
   const base = { probabilityText: NO_PROBABILITY, probabilityWhy: NO_PROBABILITY_WHY };
   const { lot, rules } = auction;
   if (!lot || !rules) {
-    return { ...base, action: 'not_ready', risk: 'няма данни', headline: 'Изчакваме данни за търга…', reasons: [], signals: [], nextValid: null, limitUse: null };
+    return { ...base, action: 'not_ready', risk: 'няма данни', headline: 'Изчакваме данни за търга…', reasons: [], signals: [], nextValid: null, limitUse: null, reference: null };
   }
   const next = nextValidBid(lot, rules, auction.bids);
   const top = highestBid(auction.bids);
@@ -54,15 +57,22 @@ export function advise({ auction, cap, myBidderId, serverNow, connection }: Advi
   const recentBidders = new Set(bidsInWindow(auction.bids, serverNow, 5 * 60_000).map((b) => b.bidderId));
   recentBidders.delete(myBidderId);
   const headroom = cap === null ? null : cap - next;
-  const limitUse = cap === null || cap <= 0 ? null : next / cap;
+  const retail = lot.retailValue ?? null;
+  const reference: Advice['reference'] = cap !== null ? 'limit' : retail ? 'retail' : null;
+  const limitUse = cap !== null ? (cap <= 0 ? null : next / cap) : retail ? next / retail : null;
   const step = top ? stepFor(top.amount, rules) : stepFor(lot.startPrice, rules);
+  const pct = (x: number) => `${Math.round(x * 100)} %`;
 
   const signals: Signal[] = [
     { id: 'position', label: 'Твоята позиция', value: leading ? 'Водиш' : top ? 'Не водиш' : 'Няма оферти', tone: leading ? 'ok' : 'info' },
-    {
+    cap !== null ? {
       id: 'limit', label: 'Спрямо лимита',
-      value: headroom === null ? 'Няма зададен лимит' : headroom >= 0 ? `Остават ${formatEur(headroom)}` : `Над лимита с ${formatEur(-headroom)}`,
-      tone: headroom === null ? 'warn' : headroom < 0 ? 'bad' : headroom < step * 3 ? 'warn' : 'ok',
+      value: headroom! >= 0 ? `Остават ${formatEur(headroom!)}` : `Над лимита с ${formatEur(-headroom!)}`,
+      tone: headroom! < 0 ? 'bad' : headroom! < step * 3 ? 'warn' : 'ok',
+    } : {
+      id: 'retail', label: 'Спрямо обявената retail стойност',
+      value: retail ? pct(next / retail) : 'не е обявена',
+      tone: !retail ? 'info' : next > retail ? 'bad' : next > retail * 0.9 ? 'warn' : 'ok',
     },
     { id: 'pace', label: 'Темп (последна минута)', value: `${lastMinute.length} ${lastMinute.length === 1 ? 'оферта' : 'оферти'}`, tone: lastMinute.length >= 4 ? 'warn' : 'info' },
     { id: 'bidders', label: 'Други участници (5 мин)', value: String(recentBidders.size), tone: 'info' },
@@ -70,7 +80,7 @@ export function advise({ auction, cap, myBidderId, serverNow, connection }: Advi
 
   const reasons: string[] = [];
   const out = (action: AdviceAction, risk: RiskLevel, headline: string): Advice =>
-    ({ ...base, action, risk, headline, reasons, signals, nextValid: next, limitUse });
+    ({ ...base, action, risk, headline, reasons, signals, nextValid: next, limitUse, reference });
 
   if (auction.status === 'ended' || remaining === 0) {
     reasons.push(top ? `Последната оферта е ${formatEur(top.amount)}.` : 'Няма подадени оферти.');
@@ -80,14 +90,35 @@ export function advise({ auction, cap, myBidderId, serverNow, connection }: Advi
     reasons.push('Без връзка не виждаме актуалната цена, затова наддаването е спряно.');
     return out('offline', 'няма данни', 'Няма връзка — изчакай повторно свързване.');
   }
+  const fastFinish = lastMinute.length >= 4 && remaining < 60_000;
   if (cap === null) {
-    reasons.push('Задай максимален лимит, за да оценим риска спрямо него.');
-    return out('set_limit', 'няма данни', 'Задай своя лимит.');
+    // No personal limit: bids may go up to the auction maximum. The declared retail value of the lot
+    // (listing data) is the only reference; it is not a prediction of what the car will sell for.
+    let risk: RiskLevel = 'нисък';
+    if (retail) {
+      const use = next / retail;
+      risk = use > 1 ? 'над retail' : use > 0.9 || fastFinish ? 'висок' : use > 0.7 || lastMinute.length >= 2 ? 'умерен' : 'нисък';
+    } else if (fastFinish) risk = 'висок';
+    else if (lastMinute.length >= 2) risk = 'умерен';
+    if (leading) {
+      reasons.push(`Най-високата оферта е твоята: ${formatEur(top!.amount)}.`);
+      reasons.push('Повторно наддаване срещу себе си не е позволено и само би вдигнало цената.');
+      return out('wait_leading', risk === 'над retail' ? 'висок' : risk, 'Водиш. Не е нужно да наддаваш сега.');
+    }
+    reasons.push(top
+      ? `Следващата валидна оферта е ${formatEur(next)} (текуща ${formatEur(top.amount)} + стъпка ${formatEur(step)}).`
+      : `Още няма оферти. Търгът започва от ${formatEur(lot.startPrice)}, първата валидна оферта е ${formatEur(next)}.`);
+    if (retail) reasons.push(`Това е ${pct(next / retail)} от обявената в лота retail стойност ${formatEur(retail)} (данни на лота, не наша оценка).`);
+    if (lastMinute.length >= 2) reasons.push(`Има ${lastMinute.length} оферти през последната минута — цената се движи бързо.`);
+    if (remaining < 30_000) reasons.push('Оферта в последните секунди може да удължи търга.');
+    const headline = !retail ? `Следващата валидна оферта е ${formatEur(next)}.`
+      : next > retail ? `Внимание: ${formatEur(next)} е над обявената retail стойност (${formatEur(retail)}).`
+      : `Следващата валидна оферта е ${formatEur(next)} — ${pct(next / retail)} от обявената retail стойност.`;
+    return out('can_bid', risk, headline);
   }
 
   // Risk: purely a function of headroom against the user's own limit, observed pace and time.
   let risk: RiskLevel;
-  const fastFinish = lastMinute.length >= 4 && remaining < 60_000;
   if (headroom! < 0) risk = 'над лимита';
   else if (headroom! < step * 2 || fastFinish) risk = 'висок';
   else if (limitUse! > 0.85 || lastMinute.length >= 2) risk = 'умерен';

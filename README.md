@@ -10,14 +10,15 @@ Desktop and mobile layouts follow the ENCHEV AI Bidder reference concepts (black
 ## What works (demo)
 
 - Live auction simulation: competing bidders, countdown from server time (clock-drift corrected), anti-sniping extensions, end of auction.
-- Current bid, step, **next valid bid**; bid history timeline; price chart with your limit line.
-- **AiBidder bubble**: draggable, snaps to the screen edge, never covers НАДДАЙ; opens a compact non-modal panel with three pages — Съвет · Защо · Лимит (tabs or swipe). Your **maximum limit**, risk level and plain-language reasons from observed data only.
+- The auction **starts from 0 €** (first valid bid = first increment, 100 €); competitors bid valid amounts (early jumps, then increments). Current bid, step, **next valid bid**; bid history; price chart.
+- No personal limit on screen: bids may go up to the **1 000 000 € maximum, enforced by the server** (`ABOVE_HOUSE_MAX`). The confirmation lets you choose a higher valid amount (± step, +1 000 €, +10 000 €); changing it requires consent again.
+- **AiBidder bubble** (advice) and **AI Info bubble** (all car characteristics + the lot's declared retail value, live auction statistics, auction rules): draggable, snap to the screen edges, never cover НАДДАЙ or each other; each opens a compact non-modal panel (tabs or swipe). AiBidder explains risk from observed data and the lot's **declared retail value** (listing data, not our estimate).
 - "Вероятност за успех": **Няма достатъчно данни** — no fabricated percentages, market values or hidden bidders.
 - Bid **confirmation** with consent, live re-validation if the price moves, idempotent submission.
 - DAVID: your own recorded clips per event when added (`public/audio/david/manifest.json`, see [docs/DAVID_AUDIO.md](docs/DAVID_AUDIO.md); none yet), otherwise Bulgarian speech (if the device has a Bulgarian voice), always-on captions, mute, **pause = voice only**, rate; voice commands "цена", "наддай" (opens confirmation only), "пауза", "продължи".
 - **Реални данни (read-only)**: `#/real` shows Enchev Auctions service readiness and verified real lots (with countdowns) through a GET-only, allow-listed bridge (`api/enchev.js`). No real bids exist upstream yet, and real bid submission stays disabled — see [docs/ENCHEV_REAL_DATA.md](docs/ENCHEV_REAL_DATA.md).
 - Connection loss, browser offline, unstable network (drops/reorder/duplicates) with gap detection and resync.
-- 3D viewer (drag/arrow keys) with the original E&A concept model — `TODO`: swap in an approved, licensed vehicle GLB via `lot.modelUrl`.
+- 3D **showroom**: the car on a glowing turntable podium (drag/arrow keys). Uses the original E&A concept model; adding an approved `public/models/porsche-911-gt3.glb` switches the demo lot to the Porsche 911 GT3 automatically at build time.
 - Accessibility: keyboard, focus management, ARIA live regions, reduced motion, high contrast, 44 px targets, safe areas.
 
 ## Commands

@@ -1,5 +1,6 @@
-// AiBidder bubble: a small floating button that opens a compact, NON-modal advice panel with
-// three pages (Съвет · Защо · Лимит). Designed not to get in the way on a phone:
+// Floating bubbles (AiBidder, AI Info): a small button that opens a compact, NON-modal panel with
+// three pages. Several bubbles share one behaviour; only one panel is open at a time.
+// Designed not to get in the way on a phone:
 // • draggable; snaps to the left or right edge; position is remembered on this device
 // • stays between the top bar and the bid bar / bottom navigation (never covers НАДДАЙ)
 // • panel opens above or below the bubble, capped in height; tap outside, ✕ or Escape closes it
@@ -12,16 +13,19 @@ export interface BubbleApi {
   layout(): void;
 }
 interface Pos { side: 'left' | 'right'; t: number; }
-const STORE_KEY = 'enchev-aib-pos-v1';
+export interface BubbleOptions { storeKey?: string; side?: 'left' | 'right'; t?: number; }
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+/** All mounted bubbles: one open panel at a time, and bubbles never rest on top of each other. */
+const registry: { el: HTMLElement; side: () => 'left' | 'right'; api: BubbleApi }[] = [];
 
-export function mountBubble(bubble: HTMLButtonElement, panel: HTMLElement, onOpenChange: (open: boolean) => void): BubbleApi {
+export function mountBubble(bubble: HTMLButtonElement, panel: HTMLElement, onOpenChange: (open: boolean) => void, options: BubbleOptions = {}): BubbleApi {
+  const STORE_KEY = options.storeKey ?? 'enchev-aib-pos-v1';
   const pages = panel.querySelector<HTMLElement>('.aib-pages')!;
   const tabs = [...panel.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
   const pageEls = [...panel.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
   const desktop = matchMedia('(min-width: 1024px)');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let pos: Pos = { side: 'right', t: 1 };
+  let pos: Pos = { side: options.side ?? 'right', t: options.t ?? 1 };
   try {
     const v = JSON.parse(localStorage.getItem(STORE_KEY) ?? 'null') as Partial<Pos> | null;
     if (v && (v.side === 'left' || v.side === 'right') && typeof v.t === 'number' && Number.isFinite(v.t)) pos = { side: v.side, t: clamp(v.t, 0, 1) };
@@ -110,6 +114,7 @@ export function mountBubble(bubble: HTMLButtonElement, panel: HTMLElement, onOpe
     panel.hidden = !v;
     bubble.setAttribute('aria-expanded', String(v));
     if (v) {
+      for (const o of registry) if (o.el !== bubble && o.api.isOpen) o.api.setOpen(false, false);
       placePanel();
       selectTab(tab, false);
       tabs[tab]!.focus({ preventScroll: true });
@@ -148,7 +153,7 @@ export function mountBubble(bubble: HTMLButtonElement, panel: HTMLElement, onOpe
     if (suppressClick) { suppressClick = false; return; }
     setOpen(!open);
   });
-  panel.querySelector('[data-ref="aibClose"]')!.addEventListener('click', () => setOpen(false));
+  panel.querySelector('.aib-x')!.addEventListener('click', () => setOpen(false));
   document.addEventListener('pointerdown', (e) => {
     if (!open) return;
     const t = e.target as Node;
@@ -196,6 +201,17 @@ export function mountBubble(bubble: HTMLButtonElement, panel: HTMLElement, onOpe
       side: r.left + r.width / 2 < (b.left + b.right) / 2 ? 'left' : 'right',
       t: clamp((r.top - b.top) / Math.max(1, b.bottom - b.top - r.height), 0, 1),
     };
+    // Never rest on another bubble on the same edge: move just above it (or below if no room).
+    for (const o of registry) {
+      if (o.el === bubble || o.side() !== pos.side) continue;
+      const other = o.el.getBoundingClientRect();
+      const y = b.top + pos.t * Math.max(0, b.bottom - b.top - r.height);
+      if (y < other.bottom + 8 && y + r.height > other.top - 8) {
+        let ny = other.top - 8 - r.height;
+        if (ny < b.top) ny = other.bottom + 8;
+        pos.t = clamp((ny - b.top) / Math.max(1, b.bottom - b.top - r.height), 0, 1);
+      }
+    }
     try { localStorage.setItem(STORE_KEY, JSON.stringify(pos)); } catch { /* ignore */ }
     place();
   };
@@ -214,10 +230,12 @@ export function mountBubble(bubble: HTMLButtonElement, panel: HTMLElement, onOpe
   selectTab(0, false);
   requestAnimationFrame(() => bubble.classList.add('ready'));
 
-  return {
+  const api: BubbleApi = {
     get isOpen() { return open; },
     setOpen,
     selectTab: (i: number) => selectTab(i),
     layout: place,
   };
+  registry.push({ el: bubble, side: () => pos.side, api });
+  return api;
 }

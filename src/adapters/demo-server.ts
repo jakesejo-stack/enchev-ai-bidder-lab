@@ -2,8 +2,9 @@
 // It behaves like an authoritative server: its own clock (deliberately skewed from the device
 // clock to exercise drift correction), its own validation, idempotency, rate limiting and
 // anti-sniping, and simulated competing bidders with private limits.
-import type { AuctionEvent, AuctionStatus, BidRecord, BidRequest, BidResult, BidRules, LotInfo } from '../domain/types.js';
-import { checkBid, extendedEnd, highestBid, nextValidBid } from '../domain/rules.js';
+import type { AuctionEvent, AuctionStatus, BidRecord, BidRequest, BidResult, BidRules } from '../domain/types.js';
+import { checkBid, currentStep, extendedEnd, highestBid, nextValidBid } from '../domain/rules.js';
+import { DEMO_LOT } from './demo-lots.js';
 import { euros } from '../domain/money.js';
 
 export interface DemoServerOptions {
@@ -16,23 +17,11 @@ export interface DemoServerOptions {
   now?: () => number;
   /** Disable the automatic competitor simulation (for deterministic tests). */
   competitors?: boolean;
+  /** Seed a short opening history (40 000 → 42 500 €) instead of starting from 0 € (tests / demos). */
+  openingBids?: boolean;
 }
 
-export const DEMO_LOT: LotInfo = {
-  lotId: 'DEMO-0001',
-  title: 'E&A концептуално купе',
-  subtitle: 'Демонстрационен 3D модел — не е реален автомобил',
-  specs: [
-    { label: 'Година', value: '2024' },
-    { label: 'Двигател', value: '3.0 L' },
-    { label: 'Мощност', value: '380 к.с.' },
-    { label: 'Пробег', value: '12 400 км' },
-  ],
-  currency: 'EUR',
-  startPrice: euros(40_000),
-  demo: true,
-  modelUrl: '/models/ea-demo-concept-coupe.glb',
-};
+export { DEMO_LOT } from './demo-lots.js';
 
 export const DEMO_RULES: BidRules = {
   increments: [
@@ -42,7 +31,7 @@ export const DEMO_RULES: BidRules = {
   ],
   antiSnipingWindowMs: 20_000,
   extensionMs: 20_000,
-  maxBid: euros(250_000),
+  maxBid: euros(1_000_000),
 };
 
 /** Small deterministic PRNG so demos and tests are reproducible. */
@@ -57,7 +46,7 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
-interface Competitor { id: string; max: number; eagerness: number; }
+export interface Competitor { id: string; max: number; eagerness: number; }
 
 type Listener = (e: AuctionEvent) => void;
 
@@ -104,16 +93,21 @@ export class DemoAuctionServer {
     this.lastBidAt.clear();
     const start = this.now();
     this.endsAt = start + (this.opts.durationMs ?? 180_000);
-    // Opening history so the screen is meaningful immediately (clearly demo data).
-    const opening = [40_000, 40_500, 41_000, 41_500, 42_000, 42_500];
-    const ids = ['Участник 7', 'Участник 3', 'Участник 7', 'Участник 12', 'Участник 3', 'Участник 12'];
-    opening.forEach((eur, i) => {
-      this.bids.push({ bidId: `b${++this.bidCounter}`, bidderId: ids[i]!, amount: euros(eur), serverTime: start - (opening.length - i) * 26_000 });
-    });
+    if (this.opts.openingBids) {
+      // Optional opening history (clearly demo data); by default the auction starts from 0 €.
+      const opening = [40_000, 40_500, 41_000, 41_500, 42_000, 42_500];
+      const ids = ['Участник 7', 'Участник 3', 'Участник 7', 'Участник 12', 'Участник 3', 'Участник 12'];
+      opening.forEach((eur, i) => {
+        this.bids.push({ bidId: `b${++this.bidCounter}`, bidderId: ids[i]!, amount: euros(eur), serverTime: start - (opening.length - i) * 26_000 });
+      });
+    }
+    // Competitors' private maxima: 55–85 % of the lot's declared retail value (rounded to 500 €).
+    const retail = this.lot.retailValue ?? euros(60_000);
+    const maxAt = (lo: number, spread: number) => Math.round((retail * (lo + this.rand() * spread)) / euros(500)) * euros(500);
     this.competitors = [
-      { id: 'Участник 3', max: euros(44_000 + Math.round(this.rand() * 6) * 500), eagerness: 0.55 },
-      { id: 'Участник 7', max: euros(45_500 + Math.round(this.rand() * 8) * 500), eagerness: 0.4 },
-      { id: 'Участник 12', max: euros(43_500 + Math.round(this.rand() * 10) * 500), eagerness: 0.35 },
+      { id: 'Участник 3', max: maxAt(0.6, 0.25), eagerness: 0.55 },
+      { id: 'Участник 7', max: maxAt(0.65, 0.2), eagerness: 0.4 },
+      { id: 'Участник 12', max: maxAt(0.55, 0.25), eagerness: 0.35 },
     ];
     this.emit({ type: 'lot_change', seq: ++this.seq, serverTime: this.now(), lot: this.lot, rules: this.rules, status: this.status, endsAt: this.endsAt, bids: [...this.bids] });
     this.tickTimer = setInterval(() => this.tick(), 250);
@@ -162,10 +156,24 @@ export class DemoAuctionServer {
       // More eager near the end; the user's own bids provoke responses (as in real auctions).
       const urgency = remaining < 30_000 ? 1.6 : 1;
       const pick = willing[Math.floor(this.rand() * willing.length)]!;
-      if (this.rand() < Math.min(0.95, pick.eagerness * urgency * this.activity)) this.accept(pick.id, next);
+      if (this.rand() < Math.min(0.95, pick.eagerness * urgency * this.activity)) this.accept(pick.id, this.competitorAmount(pick, next));
     }
     const base = remaining < 30_000 ? 2500 : 6000;
     this.scheduleCompetitor((base + this.rand() * base) / this.activity);
+  }
+
+  /**
+   * Early in an auction that starts from 0 €, bidders with high private maxima jump ahead (as proxy
+   * bids would); later they bid the minimum increment. Always a valid amount and never above their max.
+   */
+  competitorAmount(c: Competitor, next: number): number {
+    const step = currentStep(this.lot, this.rules, this.bids);
+    const top = highestBid(this.bids);
+    const retail = this.lot.retailValue ?? euros(60_000);
+    let amount = next;
+    if ((top ? top.amount : 0) < retail * 0.5) amount = next + Math.round((retail * (0.03 + this.rand() * 0.06)) / step) * step;
+    if (amount > c.max) amount = next + Math.floor((c.max - next) / step) * step;
+    return Math.max(next, amount);
   }
 
   /** Force a burst of competitor bids (demo control: "бързи оферти"). */

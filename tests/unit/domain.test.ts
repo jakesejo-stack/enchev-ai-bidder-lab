@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { stepFor, nextValidBid, checkBid, extendedEnd, highestBid } from '../../src/domain/rules.js';
+import { stepFor, nextValidBid, checkBid, extendedEnd, highestBid, alignBid, currentStep } from '../../src/domain/rules.js';
 import { applyEvent, checkGap, initialAuctionState, GAP_TIMEOUT_MS } from '../../src/domain/reducer.js';
 import { ServerClock, formatCountdown } from '../../src/domain/clock.js';
 import { advise, NO_PROBABILITY } from '../../src/domain/advisor.js';
@@ -17,7 +17,9 @@ test('increment bands', () => {
 });
 
 test('next valid bid = current + step; start price when empty', () => {
-  assert.equal(nextValidBid(DEMO_LOT, DEMO_RULES, []), DEMO_LOT.startPrice);
+  assert.equal(DEMO_LOT.startPrice, 0, 'the demo auction starts from 0 €');
+  assert.equal(nextValidBid(DEMO_LOT, DEMO_RULES, []), euros(100), 'a 0 € start opens at the first increment');
+  assert.equal(nextValidBid({ ...DEMO_LOT, startPrice: euros(40_000) }, DEMO_RULES, []), euros(40_000));
   assert.equal(nextValidBid(DEMO_LOT, DEMO_RULES, [bid('a', 'x', 42_000), bid('b', 'y', 42_500)]), euros(43_000));
   assert.equal(nextValidBid(DEMO_LOT, DEMO_RULES, [bid('a', 'x', 49_500)]), euros(50_000));
   assert.equal(nextValidBid(DEMO_LOT, DEMO_RULES, [bid('a', 'x', 50_000)]), euros(51_000));
@@ -38,7 +40,8 @@ test('bid validation (server rules)', () => {
   assert.equal(checkBid(euros(43_000), ctx({ status: 'suspended' })).code, 'NOT_ACTIVE');
   assert.equal(checkBid(euros(43_000), ctx({ bids: [bid('a', 'me', 42_500)] })).code, 'ALREADY_HIGHEST');
   assert.equal(checkBid(euros(43_000), ctx({ lotId: 'OTHER' })).code, 'WRONG_LOT');
-  assert.equal(checkBid(euros(300_000), ctx()).code, 'ABOVE_HOUSE_MAX');
+  assert.equal(checkBid(euros(1_000_500), ctx()).code, 'ABOVE_HOUSE_MAX', 'the backend maximum is 1 000 000 €');
+  assert.equal(checkBid(euros(1_000_000), ctx()).ok, true);
 });
 
 test('anti-sniping extension', () => {
@@ -106,13 +109,38 @@ test('advisor never shows a success probability and explains itself', () => {
   assert.ok(!/%/.test(JSON.stringify(a)), 'no percentages anywhere in the advice');
 });
 
+test('chosen bid amounts are rounded up to valid bids on the step grid', () => {
+  assert.equal(alignBid(euros(43_250), euros(43_000), euros(500)), euros(43_500));
+  assert.equal(alignBid(euros(42_000), euros(43_000), euros(500)), euros(43_000), 'never below the next valid bid');
+  assert.equal(alignBid(euros(53_000), euros(43_000), euros(500)), euros(53_000));
+  assert.equal(currentStep(DEMO_LOT, DEMO_RULES, []), euros(100));
+  assert.equal(currentStep(DEMO_LOT, DEMO_RULES, [bid('a', 'x', 50_000)]), euros(1_000));
+});
+
+test('advisor without a personal limit: declared retail value is the only reference', () => {
+  const retail = DEMO_LOT.retailValue!;
+  const a = advise({ auction: stateWith([bid('a', 'other', 48_000, 100_000)]), cap: null, myBidderId: 'me', serverNow: 100_000, connection: 'online' });
+  assert.equal(a.action, 'can_bid');
+  assert.equal(a.reference, 'retail');
+  assert.equal(a.nextValid, euros(48_500));
+  assert.match(a.headline, new RegExp(`${Math.round((euros(48_500) / retail) * 100)} % от обявената retail стойност`));
+  assert.ok(a.reasons.some((r) => r.includes('не наша оценка')), 'states that retail is lot data, not an estimate');
+  assert.equal(a.probabilityText, NO_PROBABILITY);
+  const over = advise({ auction: stateWith([bid('a', 'other', retail / 100, 100_000)]), cap: null, myBidderId: 'me', serverNow: 100_000, connection: 'online' });
+  assert.equal(over.risk, 'над retail');
+  assert.match(over.headline, /^Внимание/);
+  const none = advise({ auction: { ...stateWith([bid('a', 'other', 1_000, 100_000)]), lot: { ...DEMO_LOT, retailValue: null } }, cap: null, myBidderId: 'me', serverNow: 100_000, connection: 'online' });
+  assert.equal(none.reference, null);
+  assert.equal(none.headline, `Следващата валидна оферта е ${formatEur(euros(1_100))}.`);
+});
+
 test('advisor: over limit, leading, offline, ended, no limit', () => {
   const s = stateWith([bid('a', 'other', 48_000, 100_000)]);
   assert.equal(advise({ auction: s, cap: euros(48_000), myBidderId: 'me', serverNow: 100_000, connection: 'online' }).action, 'stop_over_limit');
   assert.equal(advise({ auction: stateWith([bid('a', 'me', 42_500, 100_000)]), cap: euros(48_000), myBidderId: 'me', serverNow: 100_000, connection: 'online' }).action, 'wait_leading');
   assert.equal(advise({ auction: s, cap: euros(60_000), myBidderId: 'me', serverNow: 100_000, connection: 'offline' }).action, 'offline');
   assert.equal(advise({ auction: stateWith([], 'ended'), cap: euros(60_000), myBidderId: 'me', serverNow: 100_000, connection: 'online' }).action, 'ended');
-  assert.equal(advise({ auction: s, cap: null, myBidderId: 'me', serverNow: 100_000, connection: 'online' }).action, 'set_limit');
+  assert.equal(advise({ auction: s, cap: null, myBidderId: 'me', serverNow: 100_000, connection: 'online' }).action, 'can_bid', 'no personal limit: bidding is allowed');
 });
 
 test('money formatting and parsing (bg-BG)', () => {

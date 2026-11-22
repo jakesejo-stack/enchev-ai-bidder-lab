@@ -25,6 +25,7 @@ const demo = new DemoAdapter(
     ...(activity !== undefined ? { activity } : {}),
     ...(skew !== undefined ? { clockSkewMs: skew } : {}),
     competitors: q.get('competitors') !== '0',
+    openingBids: q.get('opening') === '1',
   },
   {
     unstable: q.get('unstable') === '1',

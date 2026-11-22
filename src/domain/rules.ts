@@ -19,11 +19,26 @@ export function highestBid(bids: readonly BidRecord[]): BidRecord | null {
   return top;
 }
 
-/** Next valid bid: start price if there are no bids, otherwise current + increment for that band. */
+/**
+ * Next valid bid: the start price if there are no bids (a 0 € start opens at the first increment,
+ * because a 0 € bid is not a bid), otherwise current + increment for that band.
+ */
 export function nextValidBid(lot: LotInfo, rules: BidRules, bids: readonly BidRecord[]): Cents {
   const top = highestBid(bids);
-  if (!top) return lot.startPrice;
+  if (!top) return lot.startPrice > 0 ? lot.startPrice : stepFor(0, rules);
   return top.amount + stepFor(top.amount, rules);
+}
+
+/** Step that valid bids must follow right now (the band of the current price, or of the start). */
+export function currentStep(lot: LotInfo, rules: BidRules, bids: readonly BidRecord[]): Cents {
+  const top = highestBid(bids);
+  return stepFor(top ? top.amount : lot.startPrice, rules);
+}
+
+/** Rounds a wished amount UP to the nearest valid bid (≥ next valid, on the step grid). */
+export function alignBid(amount: Cents, nextValid: Cents, step: Cents): Cents {
+  if (!(amount > nextValid)) return nextValid;
+  return nextValid + Math.ceil((amount - nextValid) / step) * step;
 }
 
 export interface BidCheckContext {
