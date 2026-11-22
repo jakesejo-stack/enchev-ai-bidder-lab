@@ -72,6 +72,7 @@ async function run(name, opts, fn) {
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   let status = 'pass', detail = '';
   try {
+    if (opts.before) await opts.before(page);
     await page.goto(`${base}/${opts.query ?? '?seed=3'}`);
     await page.waitForFunction(() => window.__bidder?.ctrl.auction.lot && window.__bidder.ctrl.connection === 'online', null, { timeout: 15000 });
     detail = (await fn(page, ctx)) ?? '';
@@ -111,6 +112,8 @@ await run('desktop: values are consistent (next valid = current + step), countdo
 });
 
 await run('no fabricated success probability anywhere', { query: '?seed=3' }, async (p) => {
+  await p.click('[data-ref="aib"]');
+  await p.click('#aib-t1');
   const body = await p.innerText('body');
   expect(body.includes('Няма достатъчно данни'), 'shows "Няма достатъчно данни"');
   expect(!/вероятност[^\n]{0,40}\d+\s*%/i.test(body), 'no "вероятност … NN%"');
@@ -162,6 +165,8 @@ await run('price moves while confirming → amount updates and consent is requir
 });
 
 await run('user limit: over-limit blocks bidding; invalid input is flagged', { query: '?seed=3&competitors=0' }, async (p) => {
+  await p.click('[data-ref="aib"]');
+  await p.click('#aib-t2');
   await p.fill('[data-ref="cap"]', '42 800');
   await p.press('[data-ref="cap"]', 'Enter');
   await p.waitForFunction(() => window.__bidder.ctrl.blockReason === 'НАД ЛИМИТА ТИ');
@@ -313,7 +318,9 @@ for (const [w, h] of [[390, 844], [360, 740]]) {
     const nav = await p.locator('.bottomnav').boundingBox();
     expect(bar && nav && bar.y + bar.height <= nav.y + 1 && nav.y + nav.height <= h + 1, 'bid bar sits above bottom nav inside viewport');
     expect(bar.height >= 44, 'bid button ≥ 44 px');
-    const small = await p.evaluate(() => [...document.querySelectorAll('.bottomnav a, .bidbar .cta, [data-ref="pause"], [data-ref="voiceToggle"], [data-ref="mic"]')].filter((e) => { const r = e.getBoundingClientRect(); return r.width && (r.height < 40 || r.width < 40); }).length);
+    const aib = await p.locator('[data-ref="aib"]').boundingBox();
+    expect(aib && aib.y + aib.height <= bar.y && aib.x >= 0 && aib.x + aib.width <= w, 'AiBidder bubble stays above the bid bar, on screen');
+    const small = await p.evaluate(() => [...document.querySelectorAll('.bottomnav a, .bidbar .cta, [data-ref="pause"], [data-ref="voiceToggle"], [data-ref="mic"], [data-ref="aib"]')].filter((e) => { const r = e.getBoundingClientRect(); return r.width && (r.height < 40 || r.width < 40); }).length);
     expect(small === 0, `${small} tap targets smaller than 40 px`);
     await p.screenshot({ path: join(shots, `mobile-${w}.png`) });
     await p.tap('.bidbar .cta');
@@ -326,6 +333,81 @@ for (const [w, h] of [[390, 844], [360, 740]]) {
     return `${m.sw}/${m.iw}`;
   });
 }
+
+await run('AiBidder bubble (phone): compact non-modal panel, 3 pages, never covers НАДДАЙ', { ctx: PHONE(390, 844), query: '?seed=3&competitors=0' }, async (p) => {
+  expect((await text(p, 'aib')).includes('AiBidder'), 'bubble says AiBidder');
+  expect(!(await p.locator('[data-ref="aibPanel"]').isVisible()), 'panel starts closed');
+  await p.tap('[data-ref="aib"]');
+  await p.waitForSelector('[data-ref="aibPanel"]:not([hidden])');
+  await p.waitForTimeout(300);
+  const panel = await p.locator('[data-ref="aibPanel"]').boundingBox();
+  const bar = await p.locator('.bidbar .cta').boundingBox();
+  expect(panel.x >= 0 && panel.x + panel.width <= 390 && panel.y >= 0, 'panel on screen');
+  expect(panel.height <= 844 * 0.5, `panel is compact (${Math.round(panel.height)} px)`);
+  expect(panel.y + panel.height <= bar.y, 'panel does not cover the bid button');
+  expect((await p.getAttribute('[data-ref="aib"]', 'aria-expanded')) === 'true', 'aria-expanded');
+  expect((await text(p, 'advHead')).length > 5, 'advice shown on page 1');
+  await p.tap('#aib-t1');
+  await p.waitForFunction(() => document.querySelector('#aib-t1').getAttribute('aria-selected') === 'true' && document.querySelector('#aib-p0').inert);
+  await p.screenshot({ path: join(shots, 'mobile-390-aibidder.png') });
+  await p.tap('#aib-t2');
+  expect(await p.locator('[data-ref="cap"]').isVisible(), 'limit input on page 3');
+  // Non-modal: a tap on НАДДАЙ goes through (and closes the panel).
+  await p.tap('.bidbar .cta');
+  await p.waitForSelector('dialog[open]');
+  expect(!(await p.locator('[data-ref="aibPanel"]').isVisible()), 'panel closed by outside tap');
+  await p.tap('[data-ref="cfCancel"]');
+  await p.tap('[data-ref="aib"]');
+  await p.waitForSelector('[data-ref="aibPanel"]:not([hidden])');
+  await p.keyboard.press('Escape');
+  await p.waitForSelector('[data-ref="aibPanel"]', { state: 'hidden' });
+  expect(await p.evaluate(() => document.activeElement?.dataset.ref === 'aib'), 'focus back on the bubble');
+  return `panel ${Math.round(panel.height)} px`;
+});
+
+await run('AiBidder bubble: drag snaps to the other edge, does not open, position is remembered', { query: '?seed=3&competitors=0' }, async (p) => {
+  const b0 = await p.locator('[data-ref="aib"]').boundingBox();
+  await p.mouse.move(b0.x + b0.width / 2, b0.y + b0.height / 2);
+  await p.mouse.down();
+  await p.mouse.move(b0.x - 700, b0.y - 250, { steps: 12 });
+  await p.mouse.up();
+  await p.waitForTimeout(500);
+  const b1 = await p.locator('[data-ref="aib"]').boundingBox();
+  const main = await p.locator('.main').boundingBox();
+  expect((await p.getAttribute('[data-ref="aib"]', 'data-side')) === 'left' && Math.abs(b1.x - (main.x + 16)) < 3, `snapped left (x=${Math.round(b1.x)})`);
+  expect((await p.getAttribute('[data-ref="aib"]', 'aria-expanded')) === 'false', 'drag did not open the panel');
+  await p.reload();
+  await p.waitForFunction(() => window.__bidder?.ctrl.auction.lot);
+  await p.waitForTimeout(300);
+  expect((await p.getAttribute('[data-ref="aib"]', 'data-side')) === 'left', 'position remembered after reload');
+  return `x ${Math.round(b0.x)} → ${Math.round(b1.x)}`;
+});
+
+// 0.3 s of silence, 8 kHz 8-bit mono WAV — stands in for a recorded DAVID clip.
+const silentWav = (() => {
+  const n = 2400, b = Buffer.alloc(44 + n, 128);
+  b.write('RIFF', 0); b.writeUInt32LE(36 + n, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22);
+  b.writeUInt32LE(8000, 24); b.writeUInt32LE(8000, 28); b.writeUInt16LE(1, 32); b.writeUInt16LE(8, 34); b.write('data', 36); b.writeUInt32LE(n, 40);
+  return b;
+})();
+await run('DAVID audio slot: your recorded clip plays instead of the synthetic voice', {
+  tts: true, query: '?seed=3&competitors=0',
+  before: async (page) => {
+    await page.route('**/audio/david/manifest.json', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 1, clips: { new_bid: 'test-new-bid.wav' } }) }));
+    await page.route('**/audio/david/test-new-bid.wav', (r) => r.fulfill({ contentType: 'audio/wav', body: silentWav }));
+  },
+}, async (p) => {
+  await p.waitForFunction(() => window.__bidder.ctrl.david.clips.size === 1, null, { timeout: 5000 });
+  await p.click('[data-ref="voiceToggle"]');
+  await p.evaluate(() => window.__bidder.demo.server.burst(1));
+  await p.waitForFunction(() => window.__bidder.ctrl.david.playedClips.includes('new_bid'), null, { timeout: 5000 });
+  await p.waitForTimeout(800);
+  const spoken = await p.evaluate(() => window.__spoken.slice());
+  expect(!spoken.some((t) => t.startsWith('Има нова оферта')), 'clip used, not TTS: ' + spoken.join(' | '));
+  expect((await text(p, 'quote')).includes('нова оферта'), 'caption still shows the amount');
+  await p.click('.sidenav a[data-nav="settings"]');
+  expect((await text(p, 'audioInfo')).includes('1 от 16'), 'settings show 1 of 16 clips');
+});
 
 await run('3D viewer: model loads (WebGL), drag rotates without errors', { query: '?seed=3&competitors=0' }, async (p) => {
   await p.waitForFunction(() => document.querySelector('[data-ref="viewer"]').dataset.viewer === 'ready', null, { timeout: 30000 });
@@ -342,7 +424,7 @@ await run('real bid endpoint refuses (501) and no request leaves the origin', { 
 });
 
 await run('views: dashboard, AI, bids, history, settings render in Bulgarian', { query: '?seed=3&competitors=0' }, async (p) => {
-  for (const [route, needle] of [['dashboard', 'Табло'], ['ai', 'как работи DAVID'], ['bids', 'Моите оферти'], ['history', 'Транскрипт на DAVID'], ['settings', 'Висок контраст']]) {
+  for (const [route, needle] of [['dashboard', 'Табло'], ['ai', 'AiBidder и DAVID'], ['bids', 'Моите оферти'], ['history', 'Транскрипт на DAVID'], ['settings', 'Висок контраст']]) {
     await p.click(`.sidenav a[data-nav="${route}"]`);
     await p.waitForFunction((r) => document.documentElement.dataset.route === r, route);
     expect((await p.innerText('main')).includes(needle), `${route} contains ${needle}`);

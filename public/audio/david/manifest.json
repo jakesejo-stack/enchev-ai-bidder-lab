@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "note": "DAVID audio clips. Put MP3/M4A/OGG files in this folder and list them here, e.g. \"new_bid\": \"new_bid.mp3\". Keys: see docs/DAVID_AUDIO.md. Empty = Bulgarian system voice or captions only.",
+  "clips": {}
+}

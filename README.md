@@ -1,6 +1,6 @@
 # ENCHEV AI Bidder Lab (ДЕМО)
 
-Live-auction bidding interface with **DAVID**, a Bulgarian voice/caption assistant.
+Live-auction bidding interface with two assistants: **AiBidder** (advice, in a floating bubble) and **DAVID** (the Bulgarian voice of the auction).
 Desktop and mobile layouts follow the ENCHEV AI Bidder reference concepts (black / red / white, Montserrat).
 
 > **Everything here is DEMO.** Auctions run on a simulated server inside the browser. No bid ever reaches a
@@ -11,10 +11,10 @@ Desktop and mobile layouts follow the ENCHEV AI Bidder reference concepts (black
 
 - Live auction simulation: competing bidders, countdown from server time (clock-drift corrected), anti-sniping extensions, end of auction.
 - Current bid, step, **next valid bid**; bid history timeline; price chart with your limit line.
-- Your **maximum limit**; risk level and plain-language reasons from observed data only.
+- **AiBidder bubble**: draggable, snaps to the screen edge, never covers НАДДАЙ; opens a compact non-modal panel with three pages — Съвет · Защо · Лимит (tabs or swipe). Your **maximum limit**, risk level and plain-language reasons from observed data only.
 - "Вероятност за успех": **Няма достатъчно данни** — no fabricated percentages, market values or hidden bidders.
 - Bid **confirmation** with consent, live re-validation if the price moves, idempotent submission.
-- DAVID: Bulgarian speech (if the device has a Bulgarian voice), always-on captions, mute, **pause = voice only**, rate; voice commands "цена", "наддай" (opens confirmation only), "пауза", "продължи".
+- DAVID: your own recorded clips per event when added (`public/audio/david/manifest.json`, see [docs/DAVID_AUDIO.md](docs/DAVID_AUDIO.md); none yet), otherwise Bulgarian speech (if the device has a Bulgarian voice), always-on captions, mute, **pause = voice only**, rate; voice commands "цена", "наддай" (opens confirmation only), "пауза", "продължи".
 - Connection loss, browser offline, unstable network (drops/reorder/duplicates) with gap detection and resync.
 - 3D viewer (drag/arrow keys) with the original E&A concept model — `TODO`: swap in an approved, licensed vehicle GLB via `lot.modelUrl`.
 - Accessibility: keyboard, focus management, ARIA live regions, reduced motion, high contrast, 44 px targets, safe areas.

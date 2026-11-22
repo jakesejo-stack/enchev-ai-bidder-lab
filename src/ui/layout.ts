@@ -86,30 +86,10 @@ export const APP_HTML = `
         </div>
         <div class="status-chip" data-ref="statusChip"><span class="dot" aria-hidden="true"></span><span data-ref="statusText">ДЕМО · Активен търг</span></div>
       </div>
-      <section class="card timeline-card blk-timeline" aria-labelledby="tl-h">
-        <h2 id="tl-h">История на наддаването</h2>
-        <ol class="timeline" data-ref="timeline"></ol>
-      </section>
-      <div class="row2 blk-charts">
-        <details class="card chart-card" open data-ref="chartDetails">
-          <summary><h2>${icon('trend')} Динамика на наддаването</h2></summary>
-          <div class="chart-wrap" data-ref="chart"></div>
-        </details>
-        <details class="card ind-card" open data-ref="indDetails">
-          <summary><h2>${icon('target')} Лимит и индикатори</h2></summary>
-          <div class="ind-grid">
-            <div class="gauge-wrap">
-              <div data-ref="gauge"></div>
-              <div class="gauge-text"><strong data-ref="gaugePct">—</strong><span>ОТ ЛИМИТА ТИ</span></div>
-              <p class="gauge-sub" data-ref="gaugeSub"></p>
-            </div>
-            <ul class="signals" data-ref="signals"></ul>
-          </div>
-          <p class="prob"><span>Вероятност за успех:</span> <strong data-ref="prob">Няма достатъчно данни</strong>
-            <button type="button" class="linkish" data-ref="probWhy" aria-expanded="false" aria-controls="prob-why">Защо?</button></p>
-          <p class="prob-why" id="prob-why" data-ref="probWhyText" hidden></p>
-        </details>
-      </div>
+      <details class="card chart-card blk-charts" open data-ref="chartDetails">
+        <summary><h2>${icon('trend')} Динамика на наддаването</h2></summary>
+        <div class="chart-wrap" data-ref="chart"></div>
+      </details>
     </section>
 
     <section class="view" data-view="dashboard" aria-labelledby="dash-h" hidden>
@@ -123,10 +103,13 @@ export const APP_HTML = `
     </section>
 
     <section class="view" data-view="ai" aria-labelledby="ai-h" hidden>
-      <h1 id="ai-h">AI наддаване — как работи DAVID</h1>
+      <h1 id="ai-h">AI наддаване — AiBidder и DAVID</h1>
       <div class="card prose">
-        <p>DAVID използва <b>само</b> данните, които се виждат в търга: подадените оферти, стъпката, оставащото време и <b>твоя лимит</b>. Не оценява пазарна стойност, не измисля участници и не показва „вероятност за успех“ — за това няма валидиран модел.</p>
-        <p>DAVID <b>никога не наддава вместо теб</b>. Бутонът „Наддай“ и гласовата команда „наддай“ само отварят потвърждение, в което проверяваш сумата и потвърждаваш ръчно.</p>
+        <h2>AiBidder — съвети</h2>
+        <p>AiBidder (балончето в ъгъла) използва <b>само</b> данните, които се виждат в търга: подадените оферти, стъпката, оставащото време и <b>твоя лимит</b>. Не оценява пазарна стойност, не измисля участници и не показва „вероятност за успех“ — за това няма валидиран модел.</p>
+        <h2>DAVID — гласът на търга</h2>
+        <p>DAVID съобщава събитията: нови оферти, удължаване, оставащо време и край. Може да пуска собствени аудио записи; без тях използва български синтезиран глас или само надписи.</p>
+        <p>Нито AiBidder, нито DAVID <b>наддават вместо теб</b>. Бутонът „Наддай“ и гласовата команда „наддай“ само отварят потвърждение, в което проверяваш сумата и потвърждаваш ръчно.</p>
         <h2>Текуща оценка</h2>
         <p class="adv-headline" data-ref="aiHead">—</p>
         <ul class="adv-reasons" data-ref="aiReasons"></ul>
@@ -135,7 +118,6 @@ export const APP_HTML = `
         <h2>Гласови команди (където браузърът поддържа)</h2>
         <ul class="cmds"><li>„цена“ — казва текущата и следващата валидна оферта</li><li>„наддай“ — отваря потвърждението (не изпраща оферта)</li><li>„пауза“ / „продължи“ — гласът на DAVID</li></ul>
         <p class="muted">Разпознаването на реч се извършва от услугата на браузъра (напр. в Chrome гласът се обработва от Google). Микрофонът се включва само когато натиснеш бутона.</p>
-        <label class="check"><input type="checkbox" data-ref="speakAdvice"> DAVID да изговаря и препоръките (не само събитията)</label>
       </div>
     </section>
 
@@ -159,6 +141,9 @@ export const APP_HTML = `
         <h2>Достъпност</h2>
         <label class="check"><input type="checkbox" data-ref="hc"> Висок контраст</label>
         <p class="muted">Намалено движение следва системната настройка на устройството.</p>
+        <h2>DAVID — аудио</h2>
+        <p data-ref="audioInfo">—</p>
+        <p class="muted">Собствените записи се добавят в <code>public/audio/david/</code> и се вписват в <code>manifest.json</code> (виж docs/DAVID_AUDIO.md). Сумите винаги се показват в надписите.</p>
         <h2>Режим на свързване</h2>
         <p><b>ДЕМО</b> — активен. Симулиран сървър в браузъра; нищо не се изпраща по мрежата.</p>
         <p><b>РЕАЛЕН</b> — <span data-ref="realReason">не е свързан</span></p>
@@ -169,40 +154,31 @@ export const APP_HTML = `
     </section>
   </main>
 
-  <aside class="aside" aria-label="DAVID — AI асистент">
+  <aside class="aside" aria-label="DAVID и наддаване">
     <section class="card david blk-david" aria-labelledby="david-h">
       <div class="david-head">
         <button type="button" class="mic" data-ref="mic" aria-pressed="false" aria-label="Гласови команди">${icon('mic')}</button>
-        <div class="david-title"><h2 id="david-h">DAVID · LIVE AI</h2><p>ТВОЯТ AI АСИСТЕНТ ЗА НАДДАВАНЕ</p></div>
+        <div class="david-title"><h2 id="david-h">DAVID</h2><p>Гласът на търга</p></div>
+        <div class="wave" data-ref="wave" aria-hidden="true">${Array.from({ length: 14 }, (_, i) => `<i style="--i:${i}"></i>`).join('')}</div>
         <span class="vstate" data-ref="vstate">ГЛАС ИЗКЛ.</span>
       </div>
-      <div class="wave" data-ref="wave" aria-hidden="true">${Array.from({ length: 48 }, (_, i) => `<i style="--i:${i}"></i>`).join('')}</div>
       <blockquote class="quote" data-ref="quote">…</blockquote>
       <p class="voice-note" data-ref="voiceNote" hidden></p>
       <div class="voice-ctrls">
         <button type="button" class="btn ghost sm" data-ref="voiceToggle">${icon('volume')}<span data-ref="voiceToggleLabel">Включи гласа</span></button>
-        <label class="rate">Скорост <select data-ref="rate"><option value="0.85">0.85×</option><option value="1">1×</option><option value="1.15">1.15×</option><option value="1.3">1.3×</option></select></label>
+        <button type="button" class="btn ghost sm" data-ref="pause">${icon('pause')}<span data-ref="pauseLabel">Пауза</span></button>
+        <label class="rate"><span class="sr-only">Скорост на гласа</span><select data-ref="rate"><option value="0.85">0.85×</option><option value="1">1×</option><option value="1.15">1.15×</option><option value="1.3">1.3×</option></select></label>
       </div>
-      <dl class="stats">
-        <div><dt>${icon('tag')} Текуща цена</dt><dd data-ref="sCurrent">—</dd></div>
-        <div><dt>${icon('trend')} Следваща стъпка</dt><dd data-ref="sStep">—</dd></div>
-        <div><dt>${icon('target')} <label for="cap">Твоят лимит</label></dt><dd class="cap-dd"><input id="cap" data-ref="cap" inputmode="numeric" autocomplete="off" enterkeyhint="done" aria-describedby="cap-help"><span aria-hidden="true">€</span></dd></div>
-        <div><dt>${icon('clock')} Оставащо време</dt><dd data-ref="sTime">—</dd></div>
-        <div><dt>${icon('warn')} Ниво на риск</dt><dd><span class="risk" data-ref="risk">—</span></dd></div>
-      </dl>
-      <p id="cap-help" class="cap-help" data-ref="capHelp">Максималната сума, която си готов да платиш. Enter или излез от полето, за да запазиш.</p>
     </section>
-    <section class="card advice blk-advice" aria-labelledby="adv-h">
-      <div class="adv-top"><h2 id="adv-h">${icon('spark')} AI препоръка</h2><span class="prob-pill">ВЕРОЯТНОСТ: НЯМА ДАННИ</span></div>
-      <p class="adv-headline" data-ref="advHead">—</p>
-      <ul class="adv-reasons" data-ref="advReasons"></ul>
+    <section class="card timeline-card blk-timeline" aria-labelledby="tl-h">
+      <h2 id="tl-h">История на наддаването</h2>
+      <ol class="timeline" data-ref="timeline"></ol>
     </section>
     <div class="cta-block blk-cta">
       <button type="button" class="cta" data-ref="cta">${ctaInner('cta')}</button>
-      <button type="button" class="btn pausebtn" data-ref="pause">${icon('pause')}<span data-ref="pauseLabel">ПАУЗА НА ГЛАСА</span></button>
     </div>
     <div class="aside-foot blk-foot">
-      <p class="footnote">${icon('info')}<span>DAVID анализира само видимите данни от търга и не наддава вместо теб — всяка оферта изисква твое потвърждение. Паузата спира само гласа, не търга.</span></p>
+      <p class="footnote">${icon('info')}<span>AiBidder съветва само по видимите данни от търга. Нито AiBidder, нито DAVID наддават вместо теб — всяка оферта изисква твое потвърждение. Паузата спира само гласа, не търга.</span></p>
       <details class="demo-ctrls"><summary>ДЕМО контроли</summary>${demoControls}</details>
     </div>
   </aside>
@@ -214,6 +190,54 @@ export const APP_HTML = `
     ${mobileNav.map(([r, i, l]) => `<a href="#/${r}" data-nav="${r}">${icon(i)}<span>${l}</span></a>`).join('')}
   </nav>
 </div>
+
+<button type="button" class="aib" data-ref="aib" aria-expanded="false" aria-controls="aib-panel" aria-label="AiBidder — съвети">
+  <span class="aib-ic" aria-hidden="true">${icon('spark')}</span><span class="aib-name">AiBidder</span><span class="aib-dot" aria-hidden="true"></span>
+</button>
+<section class="aib-panel" id="aib-panel" data-ref="aibPanel" role="dialog" aria-modal="false" aria-labelledby="aib-h" hidden>
+  <header class="aib-head">
+    <span class="aib-ic sm" aria-hidden="true">${icon('spark')}</span>
+    <h2 id="aib-h">AiBidder</h2>
+    <span class="aib-demo">ДЕМО</span>
+    <button type="button" class="aib-x" data-ref="aibClose" aria-label="Затвори AiBidder">${icon('close')}</button>
+  </header>
+  <div class="aib-tabs" role="tablist" aria-label="AiBidder">
+    <button type="button" role="tab" id="aib-t0" aria-controls="aib-p0" aria-selected="true" data-tab="0">Съвет</button>
+    <button type="button" role="tab" id="aib-t1" aria-controls="aib-p1" aria-selected="false" tabindex="-1" data-tab="1">Защо</button>
+    <button type="button" role="tab" id="aib-t2" aria-controls="aib-p2" aria-selected="false" tabindex="-1" data-tab="2">Лимит</button>
+  </div>
+  <div class="aib-pages" data-ref="aibPages">
+    <div class="aib-page" role="tabpanel" id="aib-p0" aria-labelledby="aib-t0">
+      <div class="aib-row"><span class="risk" data-ref="risk">—</span><span class="prob-pill">ВЕРОЯТНОСТ: НЯМА ДАННИ</span></div>
+      <p class="adv-headline" data-ref="advHead">—</p>
+      <dl class="aib-kv">
+        <div><dt>Следваща оферта</dt><dd data-ref="aibNext">—</dd></div>
+        <div><dt>Твоят лимит</dt><dd><span data-ref="aibCap">—</span> <button type="button" class="linkish" data-goto="2">Промени</button></dd></div>
+      </dl>
+      <div class="aib-bar" aria-hidden="true"><i data-ref="aibBar"></i></div>
+      <p class="aib-sub" data-ref="aibSub"></p>
+    </div>
+    <div class="aib-page" role="tabpanel" id="aib-p1" aria-labelledby="aib-t1">
+      <ul class="adv-reasons" data-ref="advReasons"></ul>
+      <h3>Наблюдавани сигнали</h3>
+      <ul class="signals" data-ref="signals"></ul>
+      <p class="prob"><span>Вероятност за успех:</span> <strong data-ref="prob">Няма достатъчно данни</strong>
+        <button type="button" class="linkish" data-ref="probWhy" aria-expanded="false" aria-controls="prob-why">Защо?</button></p>
+      <p class="prob-why" id="prob-why" data-ref="probWhyText" hidden></p>
+    </div>
+    <div class="aib-page" role="tabpanel" id="aib-p2" aria-labelledby="aib-t2">
+      <label class="aib-label" for="cap">Твоят лимит</label>
+      <div class="cap-dd"><input id="cap" data-ref="cap" inputmode="numeric" autocomplete="off" enterkeyhint="done" aria-describedby="cap-help"><span aria-hidden="true">€</span></div>
+      <p id="cap-help" class="cap-help" data-ref="capHelp">Максималната сума, която си готов да платиш. Enter, за да запазиш.</p>
+      <div class="gauge-wrap">
+        <div data-ref="gauge"></div>
+        <div class="gauge-text"><strong data-ref="gaugePct">—</strong><span>ОТ ЛИМИТА ТИ</span></div>
+        <p class="gauge-sub" data-ref="gaugeSub"></p>
+      </div>
+      <label class="check"><input type="checkbox" data-ref="speakAdvice"> Изговаряй съветите (с гласа на DAVID)</label>
+    </div>
+  </div>
+</section>
 
 <dialog class="confirm" data-ref="dialog" aria-labelledby="cf-h">
   <div class="cf-inner">

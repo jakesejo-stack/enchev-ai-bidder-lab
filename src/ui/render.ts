@@ -1,6 +1,7 @@
 import type { Controller } from '../app/controller.js';
 import type { DemoAdapter } from '../adapters/demo-adapter.js';
 import { APP_HTML } from './layout.js';
+import { mountBubble } from './bubble.js';
 import { icon } from './icons.js';
 import { priceChartSvg, limitGaugeSvg } from './chart.js';
 import { formatEur, parseEurInput } from '../domain/money.js';
@@ -33,6 +34,11 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
   const html = new Map<Element, string>();
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // ------------------------------------------------------------ AiBidder bubble
+  const aib = ref<HTMLButtonElement>('aib');
+  let lastAction = '';
+  const bubble = mountBubble(aib, ref('aibPanel'), (open) => { if (open) delete aib.dataset.new; render(); });
+
   // ------------------------------------------------------------ routing
   function route(): Route {
     const r = location.hash.replace(/^#\/?/, '') as Route;
@@ -46,6 +52,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
       if (a.dataset.nav === r) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
     if (focus) document.getElementById('main')?.focus({ preventScroll: false });
+    bubble.layout(); // the bid bar shows only on the live view (phones)
     render();
   }
   addEventListener('hashchange', () => applyRoute(true));
@@ -73,7 +80,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
   const capHelp = ref('capHelp');
   const commitCap = () => {
     const raw = capInput.value.trim();
-    if (!raw) { ctrl.setCap(null); capInput.removeAttribute('aria-invalid'); setText(capHelp, 'Лимитът е изчистен — DAVID няма да оценява риска.'); return; }
+    if (!raw) { ctrl.setCap(null); capInput.removeAttribute('aria-invalid'); setText(capHelp, 'Лимитът е изчистен — AiBidder няма да оценява риска.'); return; }
     const v = parseEurInput(raw);
     if (v === null) { capInput.setAttribute('aria-invalid', 'true'); setText(capHelp, 'Въведи сума в евро, напр. 48 000.'); capHelp.classList.add('show'); return; }
     capInput.removeAttribute('aria-invalid');
@@ -91,7 +98,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
   rate.addEventListener('change', () => ctrl.setSetting('rate', Number(rate.value)));
   ref('voiceToggle').addEventListener('click', () => {
     ctrl.david.enable(!ctrl.david.enabled);
-    if (ctrl.david.enabled) ctrl.david.say('Гласът на DAVID е включен.', 'system');
+    if (ctrl.david.enabled) ctrl.david.say('Гласът на DAVID е включен.', 'system', undefined, 'voice_on');
   });
   ref('pause').addEventListener('click', () => { if (ctrl.david.paused) ctrl.david.resume(); else ctrl.david.pause(); });
   ref('mic').addEventListener('click', () => ctrl.mic.toggle());
@@ -110,7 +117,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     probWhy.setAttribute('aria-expanded', String(!t.hidden));
   });
   // Collapsible chart sections start closed on phones.
-  if (matchMedia('(max-width: 1023px)').matches) { ref<HTMLDetailsElement>('chartDetails').open = false; ref<HTMLDetailsElement>('indDetails').open = false; }
+  if (matchMedia('(max-width: 1023px)').matches) ref<HTMLDetailsElement>('chartDetails').open = false;
 
   // Demo controls (event delegation: there are two copies of the buttons).
   document.addEventListener('click', (e) => {
@@ -240,7 +247,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     setText(ref('voiceNote'), note ?? '');
     setText(ref('voiceToggleLabel'), d.enabled ? 'Изключи гласа' : 'Включи гласа');
     ref('voiceToggle').setAttribute('aria-pressed', String(d.enabled));
-    setText(ref('pauseLabel'), d.paused ? 'ПРОДЪЛЖИ ГЛАСА' : 'ПАУЗА НА ГЛАСА');
+    setText(ref('pauseLabel'), d.paused ? 'Продължи' : 'Пауза');
     ref('pause').setAttribute('aria-pressed', String(d.paused));
     if (iconState.paused !== d.paused) {
       iconState.paused = d.paused;
@@ -255,9 +262,6 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     mic.setAttribute('aria-pressed', String(ctrl.mic.state === 'listening'));
     mic.title = { unsupported: 'Гласовите команди не се поддържат от този браузър', idle: 'Натисни и кажи команда', listening: 'Слушам…', denied: 'Достъпът до микрофона е отказан', error: 'Грешка при разпознаване на реч' }[ctrl.mic.state];
     (mic as HTMLButtonElement).disabled = ctrl.mic.state === 'unsupported';
-    setText(ref('sCurrent'), top ? formatEur(top.amount) : '—');
-    setText(ref('sStep'), step !== null ? formatEur(step) : '—');
-    setText(ref('sTime'), lot ? formatCountdown(rem) : '—');
     const risk = ref('risk');
     setText(risk, adv.risk.toUpperCase());
     risk.dataset.level = adv.risk;
@@ -272,7 +276,23 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     const reasons = adv.reasons.map((r) => `<li>${esc(r)}</li>`).join('');
     setHtml(ref('advReasons'), reasons, html);
     setHtml(ref('aiReasons'), reasons, html);
-    ref('advReasons').closest('.advice')!.setAttribute('data-action', adv.action);
+    ref('aibPanel').dataset.action = adv.action;
+    aib.dataset.level = adv.risk;
+    if (adv.action !== lastAction) {
+      if (lastAction !== '' && !bubble.isOpen) aib.dataset.new = 'true';
+      lastAction = adv.action;
+    }
+    aib.setAttribute('aria-label', `AiBidder — съвети. Риск: ${adv.risk}.${aib.dataset.new ? ' Нов съвет.' : ''}`);
+    setText(ref('aibNext'), next !== null ? formatEur(next) : '—');
+    setText(ref('aibCap'), ctrl.cap === null ? 'не е зададен' : formatEur(ctrl.cap));
+    const use = adv.limitUse;
+    const bar = ref('aibBar');
+    bar.style.width = `${use === null ? 0 : Math.min(100, Math.round(use * 100))}%`;
+    bar.classList.toggle('over', use !== null && use > 1);
+    setText(ref('aibSub'), ctrl.cap === null || next === null
+      ? 'Задай лимит, за да оцени AiBidder риска.'
+      : next > ctrl.cap ? `Следващата оферта е над лимита ти с ${formatEur(next - ctrl.cap)}.`
+      : `След следващата оферта до лимита остават ${formatEur(ctrl.cap - next)}.`);
 
     // CTA
     const block = ctrl.blockReason;
@@ -326,6 +346,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
       setHtml(ref('log'), ctrl.log.slice(-200).reverse().map((l) => `<li class="${l.kind}"><time>${timeFmt.format(l.at)}</time> ${esc(l.text)}</li>`).join(''), html);
       setHtml(ref('transcript'), d.captions.slice(-200).reverse().map((c2) => `<li class="${c2.kind}"><time>${timeFmt.format(c2.at)}</time> ${esc(c2.text)}</li>`).join(''), html);
     }
+    if (r === 'settings') setText(ref('audioInfo'), d.audioInfo);
     if (r === 'settings') setText(ref('realReason'), CONFIG.realMode.enabled ? 'конфигуриран' : `не е свързан. ${CONFIG.realMode.reason}`);
 
     // Announce new captions; toast bid results.

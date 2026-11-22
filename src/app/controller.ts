@@ -82,7 +82,7 @@ export class Controller {
       window.addEventListener('online', () => { this.browserOnline = true; this.refreshAdvice(); this.notify(); });
       window.addEventListener('offline', () => {
         this.browserOnline = false;
-        this.david.say('Устройството е без интернет. Наддаването е спряно.', 'alert');
+        this.david.say('Устройството е без интернет. Наддаването е спряно.', 'alert', undefined, 'offline');
         this.refreshAdvice(); this.notify();
       });
     }
@@ -161,7 +161,7 @@ export class Controller {
         const top = highestBid(e.bids);
         if (!hadLot || e.type === 'lot_change') {
           this.log.push({ at, text: `Свързан с ${e.lot.demo ? 'ДЕМО ' : ''}лот ${e.lot.lotId}`, kind: 'system' });
-          this.david.say(`Свързан съм с ${e.lot.demo ? 'демо ' : ''}търга. Текуща оферта: ${top ? speakEur(top.amount) : 'няма'}.`, 'system');
+          this.david.say(`Свързан съм с ${e.lot.demo ? 'демо ' : ''}търга. Текуща оферта: ${top ? speakEur(top.amount) : 'няма'}.`, 'system', undefined, 'connected');
         } else {
           this.log.push({ at, text: 'Синхронизиране с актуалното състояние', kind: 'system' });
         }
@@ -170,9 +170,9 @@ export class Controller {
       case 'bid': {
         const mine = e.bid.bidderId === this.adapter.bidderId;
         this.log.push({ at, text: `${mine ? 'Ти' : e.bid.bidderId}: ${formatEur(e.bid.amount)}`, kind: mine ? 'mine' : 'bid' });
-        if (mine) this.david.say(`Твоята оферта от ${speakEur(e.bid.amount)} е най-високата.`, 'event', 'price');
-        else if (wasLeading) this.david.say(`Някой те надмина: ${speakEur(e.bid.amount)}.`, 'alert', 'price');
-        else this.david.say(`Има нова оферта: ${speakEur(e.bid.amount)}.`, 'event', 'price');
+        if (mine) this.david.say(`Твоята оферта от ${speakEur(e.bid.amount)} е най-високата.`, 'event', 'price', 'you_lead');
+        else if (wasLeading) this.david.say(`Някой те надмина: ${speakEur(e.bid.amount)}.`, 'alert', 'price', 'outbid');
+        else this.david.say(`Има нова оферта: ${speakEur(e.bid.amount)}.`, 'event', 'price', 'new_bid');
         break;
       }
       case 'extension':
@@ -180,7 +180,7 @@ export class Controller {
           const s = Math.round(e.byMs / 1000);
           this.extendedAt = Date.now();
           this.log.push({ at, text: `Търгът е удължен с ${s} с (оферта в последните секунди)`, kind: 'status' });
-          this.david.say(`Търгът е удължен с ${s} секунди.`, 'alert', 'ext');
+          this.david.say(`Търгът е удължен с ${s} секунди.`, 'alert', 'ext', 'extended');
         } else {
           this.log.push({ at, text: 'Краят на търга е променен', kind: 'status' });
         }
@@ -190,7 +190,7 @@ export class Controller {
         if (e.status === 'ended') {
           const top = highestBid(this.auction.bids);
           const mine = top?.bidderId === this.adapter.bidderId;
-          this.david.say(mine ? `Търгът приключи. Твоята оферта от ${speakEur(top!.amount)} е най-високата.` : `Търгът приключи${top ? ` при ${speakEur(top.amount)}` : ''}.`, 'alert');
+          this.david.say(mine ? `Търгът приключи. Твоята оферта от ${speakEur(top!.amount)} е най-високата.` : `Търгът приключи${top ? ` при ${speakEur(top.amount)}` : ''}.`, 'alert', undefined, mine ? 'ended_won' : 'ended');
         }
         break;
     }
@@ -219,11 +219,11 @@ export class Controller {
     this.connection = s;
     if (s === 'offline' && prev === 'online') {
       this.log.push({ at: this.serverNow, text: `Връзката е прекъсната${detail ? ` (${detail})` : ''}`, kind: 'error' });
-      this.david.say('Връзката е прекъсната. Наддаването е спряно, докато се свържем отново.', 'alert');
+      this.david.say('Връзката е прекъсната. Наддаването е спряно, докато се свържем отново.', 'alert', undefined, 'connection_lost');
     }
     if (s === 'online' && (prev === 'offline' || prev === 'reconnecting')) {
       this.log.push({ at: this.serverNow, text: 'Връзката е възстановена — синхронизиране', kind: 'system' });
-      this.david.say('Връзката е възстановена.', 'system');
+      this.david.say('Връзката е възстановена.', 'system', undefined, 'connection_back');
     }
     this.refreshAdvice();
     this.notify();
@@ -244,7 +244,7 @@ export class Controller {
         if (rem <= t && rem > t - 2000 && !this.warned.has(t)) {
           this.warned.add(t);
           const text = t === 60_000 ? 'Остава една минута.' : `Остават ${t / 1000} секунди.`;
-          this.david.say(text, 'alert', 'time');
+          this.david.say(text, 'alert', 'time', t === 60_000 ? 'time_60' : t === 30_000 ? 'time_30' : t === 10_000 ? 'time_10' : undefined);
         } else if (rem <= t - 2000) {
           this.warned.add(t); // passed silently (e.g. joined late)
         }
@@ -315,7 +315,7 @@ export class Controller {
       attempt.status = 'rejected';
       attempt.message = res.message;
       this.log.push({ at: this.serverNow, text: `Отказана оферта ${formatEur(c.amount)}: ${res.message}`, kind: 'error' });
-      this.david.say(`Офертата не е приета. ${res.message}`, 'alert');
+      this.david.say(`Офертата не е приета. ${res.message}`, 'alert', undefined, 'bid_rejected');
       this.confirm = { ...this.confirm, pending: false, error: res.message };
     }
     this.refreshAdvice();
@@ -333,7 +333,7 @@ export class Controller {
       }
       case 'open_bid':
         if (this.blockReason) this.david.say(`Не може да наддадеш сега: ${this.blockReason.toLowerCase()}.`, 'event');
-        else { this.openConfirm(); this.david.say('Отворих потвърждението. Провери сумата и потвърди ръчно.', 'event'); }
+        else { this.openConfirm(); this.david.say('Отворих потвърждението. Провери сумата и потвърди ръчно.', 'event', undefined, 'confirm_opened'); }
         break;
       case 'pause_voice': this.david.pause(); break;
       case 'resume_voice': this.david.resume(); break;

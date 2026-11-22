@@ -35,5 +35,6 @@ const ctrl = new Controller(demo);
 const root = document.getElementById('app');
 if (!root) throw new Error('#app missing');
 mountApp(root, ctrl, demo);
+void ctrl.david.loadClips('/audio/david/manifest.json'); // your own DAVID recordings, if any
 ctrl.start();
 (window as unknown as { __bidder: unknown }).__bidder = { ctrl, demo };
