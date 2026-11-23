@@ -30,7 +30,8 @@ export interface ConfirmState {
   priceMoved: boolean;
 }
 
-export interface Settings { speakAdvice: boolean; highContrast: boolean; rate: number; }
+/** `david`: DAVID's voice AND the 3D auctioneer subtitles, switched together (on by default). */
+export interface Settings { speakAdvice: boolean; highContrast: boolean; rate: number; david: boolean; }
 
 const STORE_KEY = 'enchev-ai-bidder-lab:v1';
 export interface Subtitle { id: number; main: string; sub: string; tone: 'mine' | 'other'; }
@@ -63,7 +64,7 @@ export class Controller {
   /** Anti-sniping extensions seen in this auction (for AI Info statistics). */
   extensions = 0;
   confirm: ConfirmState = { open: false, amount: 0, key: '', consent: false, pending: false, error: null, priceMoved: false };
-  settings: Settings = { speakAdvice: false, highContrast: false, rate: 1 };
+  settings: Settings = { speakAdvice: false, highContrast: false, rate: 1, david: true };
   david: David;
   mic: Microphone;
   advice!: Advice;
@@ -82,6 +83,7 @@ export class Controller {
     this.mic = new Microphone((t) => this.onVoiceText(t), () => this.notify());
     this.load();
     this.david.setRate(this.settings.rate);
+    this.david.enable(this.settings.david !== false);
     this.refreshAdvice();
   }
 
@@ -303,7 +305,18 @@ export class Controller {
     this.notify();
   }
 
+  /** The DAVID switch: voice and 3D subtitles together. Remembered on this device. */
+  setDavid(on: boolean): void {
+    this.david.enable(on);
+    this.settings = { ...this.settings, david: on };
+    if (!on) this.subtitle = null;
+    this.save();
+    if (on) this.david.say('Гласът на DAVID е включен.', 'system', undefined, 'voice_on');
+    this.notify();
+  }
+
   private showSubtitle(main: string, sub: string, tone: 'mine' | 'other'): void {
+    if (!this.david.enabled) return; // DAVID off = no auctioneer animation either
     this.subtitle = { id: ++this.subtitleId, main, sub, tone };
   }
 

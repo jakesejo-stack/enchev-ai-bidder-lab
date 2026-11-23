@@ -5,6 +5,7 @@ import { mountBubble } from './bubble.js';
 import { icon } from './icons.js';
 import { priceChartSvg, barChartSvg, priceSeriesSvg } from './chart.js';
 import { formatEur, parseEurInput } from '../domain/money.js';
+import { VAT_RATE } from '../domain/costs.js';
 import { formatCountdown } from '../domain/clock.js';
 import { nextValidBid, stepFor } from '../domain/rules.js';
 import { CONFIG } from '../config.js';
@@ -16,7 +17,7 @@ import { availableSources, defaultSource, demoAllowed, type SourceKind } from '.
 import { generateDemoHistory } from '../analytics/demo-history.js';
 import { similarLots } from '../domain/similar.js';
 import { quickBids } from '../domain/advisor.js';
-import { DEMO_LOT, PEUGEOT_LOT, SIMILAR_LOTS } from '../adapters/demo-lots.js';
+import { DEMO_LOT, SIMILAR_LOTS } from '../adapters/demo-lots.js';
 
 const ROUTES = ['live', 'dashboard', 'ai', 'bids', 'history', 'real', 'settings'] as const;
 type Route = (typeof ROUTES)[number];
@@ -54,7 +55,19 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
   // ------------------------------------------------------------ AiBidder bubble
   const aib = ref<HTMLButtonElement>('aib');
   let lastAction = '';
-  const bubble = mountBubble(aib, ref('aibPanel'), (open) => { if (open) delete aib.dataset.new; render(); });
+  // DAVID switch rides on top of the AiBidder bubble: one tap = voice + 3D subtitles on/off.
+  const davidPill = ref<HTMLButtonElement>('davidPill');
+  const bubble = mountBubble(aib, ref('aibPanel'), (open) => { if (open) delete aib.dataset.new; render(); }, { companion: davidPill });
+  davidPill.addEventListener('click', () => ctrl.setDavid(!ctrl.david.enabled));
+  // DAVID is heard only while you are here: another tab, app or window silences him at once.
+  const syncPresence = () => ctrl.david.setPresent(document.visibilityState === 'visible' && document.hasFocus());
+  document.addEventListener('visibilitychange', syncPresence);
+  addEventListener('blur', syncPresence);
+  addEventListener('focus', syncPresence);
+  addEventListener('pageshow', syncPresence);
+  addEventListener('pagehide', () => ctrl.david.setPresent(false));
+  document.addEventListener('pointerdown', syncPresence, true);
+  syncPresence();
   const info = mountBubble(ref<HTMLButtonElement>('aii'), ref('aiiPanel'), () => render(), { storeKey: 'enchev-aii-pos-v1', side: 'left' });
 
   // ------------------------------------------------------------ routing
@@ -251,22 +264,12 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
       viewerHandle = mountViewer(viewerHost, { modelUrl: url, scan: !!lot.modelScan, length: lot.modelLength, reducedMotion: reduceMotion, maxDpr: matchMedia('(pointer: coarse)').matches ? 1.5 : 1.75 });
     }).catch(() => { viewerHost.dataset.viewer = 'fallback'; });
   }
-  // DEMO: switch between the Peugeot 206 scan and the E&A concept (a new demo auction for that car).
-  viewerHost.addEventListener('click', (e) => {
-    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-lotpick]');
-    if (!b || !demo) return;
-    const target = [PEUGEOT_LOT, DEMO_LOT, ...SIMILAR_LOTS].find((l) => l.lotId === b.dataset.lotpick);
-    if (target && target.lotId !== ctrl.auction.lot?.lotId) { demo.server.switchLot(target); toast(`ДЕМО: нов търг за ${target.title}`, 'info'); }
-  });
 
   // ------------------------------------------------------------ inputs
   const rate = ref<HTMLSelectElement>('rate');
   rate.value = String(ctrl.settings.rate);
   rate.addEventListener('change', () => ctrl.setSetting('rate', Number(rate.value)));
-  ref('voiceToggle').addEventListener('click', () => {
-    ctrl.david.enable(!ctrl.david.enabled);
-    if (ctrl.david.enabled) ctrl.david.say('Гласът на DAVID е включен.', 'system', undefined, 'voice_on');
-  });
+  ref('voiceToggle').addEventListener('click', () => ctrl.setDavid(!ctrl.david.enabled));
   ref('pause').addEventListener('click', () => { if (ctrl.david.paused) ctrl.david.resume(); else ctrl.david.pause(); });
   ref('mic').addEventListener('click', () => ctrl.mic.toggle());
   ref('realRefresh').addEventListener('click', () => refreshReal());
@@ -358,6 +361,19 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     else if (v === 'up') ctrl.setConfirmAmount(amount + step);
     else ctrl.setConfirmAmount(amount + Number(v));
   });
+  // Free amount: type any sum; it is rounded UP to the step grid and capped at the lot's maximum (server rule).
+  const cfFree = ref<HTMLInputElement>('cfFree');
+  ref('cfFreeForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!ctrl.confirm.open) return;
+    const c = parseEurInput(cfFree.value);
+    if (c === null) { toast('Напиши сума в евро, напр. 55 000', 'bad'); cfFree.focus(); return; }
+    const max = ctrl.auction.rules?.maxBid ?? null;
+    ctrl.setConfirmAmount(c);
+    if (max !== null && c > max) toast(`Максимумът за лота е ${formatEur(max)} — сумата е намалена до него.`, 'info');
+    else if (ctrl.nextValid !== null && c < ctrl.nextValid) toast(`Най-малката валидна оферта е ${formatEur(ctrl.nextValid)}.`, 'info');
+    cfFree.value = '';
+  });
   ref('cfX').addEventListener('click', () => ctrl.closeConfirm());
   dialog.addEventListener('cancel', (e) => { e.preventDefault(); ctrl.closeConfirm(); });
   let lastFocus: HTMLElement | null = null;
@@ -407,7 +423,6 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
       startViewer(lot);
       viewerHost.dataset.model = lot.modelUrl ? (lot.modelScan ? 'scan' : 'yes') : 'none';
       setText(ref('viewerTag'), lot.modelScan ? 'ДЕМО · реален 3D скан' : lot.modelUrl ? 'ДЕМО · 3D концепт, не е реален автомобил' : '');
-      viewerHost.querySelectorAll<HTMLElement>('[data-lotpick]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lotpick === lot.lotId)));
     }
 
     // Top bar
@@ -437,7 +452,8 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     setText(ref('next'), next !== null ? formatEur(next) : '—');
     // Auctioneer subtitle in 3D: your bid green/white, someone else's red/yellow.
     const sub = ctrl.subtitle;
-    if (sub && sub.id !== lastSubtitle) {
+    if (!ctrl.david.enabled) { const el = ref('sub3d'); if (el.classList.contains('on')) { clearTimeout(subTimer); el.classList.remove('show', 'on'); } }
+    else if (sub && sub.id !== lastSubtitle) {
       lastSubtitle = sub.id;
       const el = ref('sub3d');
       el.dataset.tone = sub.tone;
@@ -482,6 +498,10 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     setText(ref('voiceNote'), note ?? '');
     setText(ref('voiceToggleLabel'), d.enabled ? 'Изключи гласа' : 'Включи гласа');
     ref('voiceToggle').setAttribute('aria-pressed', String(d.enabled));
+    davidPill.setAttribute('aria-pressed', String(d.enabled));
+    davidPill.dataset.state = vs;
+    davidPill.classList.toggle('talking', vs === 'speaking' && !reduceMotion);
+    setText(ref('davidPillState'), d.enabled ? 'включен' : 'изключен');
     setText(ref('pauseLabel'), d.paused ? 'Продължи' : 'Пауза');
     ref('pause').setAttribute('aria-pressed', String(d.paused));
     if (iconState.paused !== d.paused) {
@@ -564,6 +584,8 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     ref('aibSimilarBtn').hidden = !adv.suggestSimilar;
     setText(ref('aibBudgetBtn'), ctrl.cap === null ? 'Задай бюджет' : `Бюджет: ${formatEur(ctrl.cap)}`);
     setText(ref('aibErv'), retailV ? formatEur(retailV) : 'не е посочена');
+    // VAT in one sentence under the car.
+    setText(ref('lotVat'), `ДДС: ${Math.round(VAT_RATE * 100)} % — начислява се върху таксите на търга, не върху колата; колата е в ЕС, затова няма мито.`);
     setText(ref('budgetNow'), ctrl.cap === null ? 'Няма зададен бюджет.' : `Текущ бюджет: ${formatEur(ctrl.cap)}${adv.walkAway !== null ? ` · препоръчан праг: ${formatEur(adv.walkAway)}` : ''}`);
     if (document.activeElement !== budgetInput && budgetInput.dataset.cap !== String(ctrl.cap)) {
       budgetInput.dataset.cap = String(ctrl.cap);

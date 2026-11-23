@@ -45,39 +45,6 @@ export const CONCEPT_LOT: LotInfo = {
   modelUrl: '/models/ea-demo-concept-coupe.glb',
 };
 
-// The user's own Peugeot 206: a real iPhone photogrammetry scan (Object Capture → GLB, geometry 1:1).
-// Shown only as a labelled DEMO lot. Its year, mileage and estimated retail value are not set yet,
-// so none are shown (no invented data); demoPriceRef only keeps the simulated bidding realistic.
-export const PEUGEOT_LOT: LotInfo = {
-  lotId: 'DEMO-0206',
-  title: 'Peugeot 206',
-  subtitle: 'Реален 3D скан на автомобила · ДЕМО лот, не е реален търг',
-  specs: [
-    { label: 'Марка', value: 'Peugeot' },
-    { label: 'Модел', value: '206' },
-    { label: '3D', value: 'Реален скан' },
-    { label: 'Детайл', value: '34 267 триъгълника' },
-  ],
-  details: [
-    { label: 'Марка', value: 'Peugeot' },
-    { label: 'Модел', value: '206' },
-    { label: '3D модел', value: 'Реален фотограметричен скан (iPhone), геометрия 1:1' },
-    { label: 'Година', value: 'не е посочена' },
-    { label: 'Пробег', value: 'не е посочен' },
-    { label: 'Състояние', value: 'вижте 3D модела' },
-    { label: 'Местоположение', value: 'България' },
-  ],
-  retailValue: null,
-  retailSource: 'не е посочена',
-  currency: 'EUR',
-  startPrice: 0,
-  demo: true,
-  modelUrl: '/models/peugeot-scan-lite.glb',
-  modelScan: true,
-  modelLength: 3.85,
-  demoPriceRef: euros(4_000),
-};
-
 export const PORSCHE_LOT: LotInfo = {
   lotId: 'DEMO-0911',
   title: 'Porsche 911 GT3 (992)',

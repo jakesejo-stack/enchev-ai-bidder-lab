@@ -13,7 +13,8 @@ export interface BubbleApi {
   layout(): void;
 }
 interface Pos { side: 'left' | 'right'; t: number; }
-export interface BubbleOptions { storeKey?: string; side?: 'left' | 'right'; t?: number; }
+/** `companion`: a small control that rides just above the bubble (below it when there is no room). */
+export interface BubbleOptions { storeKey?: string; side?: 'left' | 'right'; t?: number; companion?: HTMLElement; }
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 /** All mounted bubbles: one open panel at a time, and bubbles never rest on top of each other. */
 const registry: { el: HTMLElement; side: () => 'left' | 'right'; api: BubbleApi }[] = [];
@@ -57,7 +58,18 @@ export function mountBubble(bubble: HTMLButtonElement, panel: HTMLElement, onOpe
     const y = b.top + pos.t * Math.max(0, b.bottom - b.top - h);
     bubble.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
     bubble.dataset.side = pos.side;
+    placeCompanion(x, y, b);
     if (open) placePanel();
+  }
+
+  function placeCompanion(x: number, y: number, b = bounds()): void {
+    const c = options.companion;
+    if (!c) return;
+    const cw = c.offsetWidth, ch = c.offsetHeight, w = bubble.offsetWidth, h = bubble.offsetHeight;
+    const cx = clamp(x + w / 2 - cw / 2, 6, innerWidth - cw - 6);
+    const cy = y - ch - 6 >= b.top - 4 ? y - ch - 6 : y + h + 6;
+    c.style.transform = `translate(${Math.round(cx)}px, ${Math.round(cy)}px)`;
+    c.dataset.side = pos.side;
   }
 
   function placePanel(): void {
@@ -203,6 +215,7 @@ export function mountBubble(bubble: HTMLButtonElement, panel: HTMLElement, onOpe
     const x = clamp(drag.ox + dx, b.left, b.right - bubble.offsetWidth);
     const y = clamp(drag.oy + dy, b.top, b.bottom - bubble.offsetHeight);
     bubble.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+    placeCompanion(x, y, b);
   });
   const endDrag = (e: PointerEvent) => {
     if (!drag || e.pointerId !== drag.id) return;
@@ -245,7 +258,7 @@ export function mountBubble(bubble: HTMLButtonElement, panel: HTMLElement, onOpe
   desktop.addEventListener('change', place);
   place();
   selectTab(0, false);
-  requestAnimationFrame(() => bubble.classList.add('ready'));
+  requestAnimationFrame(() => { bubble.classList.add('ready'); options.companion?.classList.add('ready'); place(); });
 
   const api: BubbleApi = {
     get isOpen() { return open; },

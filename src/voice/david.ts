@@ -4,7 +4,10 @@
 //   → a Bulgarian system voice (speechSynthesis) → captions only. Never a wrong-language voice.
 // • Recorded clips are fixed phrases ("Нова оферта!"); amounts always appear in the caption.
 // • Pause/mute affect the VOICE only. They never pause or influence the auction.
-// • Voice starts muted until the user turns it on (browsers require a user gesture anyway).
+// • The DAVID switch (voice + 3D subtitles) is on by default and remembered per device; browsers
+//   still keep the voice silent until the first tap on the page.
+// • DAVID is only heard while you are on the page: a hidden tab, another app or another window
+//   silences him at once (captions continue); nothing queued is replayed when you come back.
 
 export type CaptionKind = 'event' | 'alert' | 'advice' | 'system' | 'user';
 export interface Caption { id: number; at: number; text: string; kind: CaptionKind; }
@@ -45,6 +48,8 @@ export class David {
   captions: Caption[] = [];
   enabled = false;
   paused = false;
+  /** False while the page is hidden or the browser window is not focused. */
+  present = true;
   rate = 1;
   voice: SpeechSynthesisVoice | null = null;
   supported: boolean;
@@ -133,7 +138,7 @@ export class David {
     this.captions.push(cap);
     if (this.captions.length > 300) this.captions.splice(0, this.captions.length - 300);
     const voiced = (clip && this.hasClips && this.clips.has(clip)) || this.canTts;
-    if (this.enabled && voiced) {
+    if (this.enabled && this.present && voiced) {
       if (key) this.queue = this.queue.filter((q) => q.key !== key);
       const item: QueueItem = { text, kind, ...(key ? { key } : {}), ...(clip ? { clip } : {}), ...(fast ? { fast } : {}) };
       if (kind === 'alert') this.queue.unshift(item); else this.queue.push(item);
@@ -153,7 +158,7 @@ export class David {
   }
 
   private pump(): void {
-    if (this.paused || this.current || !this.queue.length) return;
+    if (this.paused || !this.present || this.current || !this.queue.length) return;
     const item = this.queue.shift()!;
     const url = item.clip && this.hasClips ? this.clips.get(item.clip) : undefined;
     this.current = item;
@@ -199,6 +204,14 @@ export class David {
 
   enable(on: boolean): void {
     this.enabled = on;
+    if (!on) { this.queue = []; this.current = null; this.speaking = false; this.stopOutput(); }
+    this.onChange();
+  }
+
+  /** Page visibility/focus: away = silent now and nothing queued for later (stale calls are useless). */
+  setPresent(on: boolean): void {
+    if (this.present === on) return;
+    this.present = on;
     if (!on) { this.queue = []; this.current = null; this.speaking = false; this.stopOutput(); }
     this.onChange();
   }

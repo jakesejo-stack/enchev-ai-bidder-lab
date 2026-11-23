@@ -73,9 +73,9 @@ async function run(name, opts, fn) {
   let status = 'pass', detail = '';
   try {
     if (opts.before) await opts.before(page);
-    // Existing scenarios run on the E&A concept lot (fixed sample values); the app opens the Peugeot 206 scan by default.
+    // Scenarios run on the E&A concept lot (fixed sample values).
     const qy = opts.query ?? '?seed=3';
-    await page.goto(`${base}/${/[?&]lot=/.test(qy) || !qy.startsWith('?') ? qy : qy.replace(/^\?/, '?lot=concept&')}`);
+    await page.goto(`${base}/${qy}`);
     await page.waitForFunction(() => window.__bidder?.ctrl.auction.lot && window.__bidder.ctrl.connection === 'online', null, { timeout: 15000 });
     detail = (await fn(page, ctx)) ?? '';
     const unexpected = errors.filter((e) => !(opts.allowErrors && opts.allowErrors.test(e)));
@@ -90,6 +90,8 @@ async function run(name, opts, fn) {
   await ctx.close();
 }
 const expect = (cond, msg) => { if (!cond) throw new Error(msg); };
+// DAVID (voice + 3D subtitles) is on by default; make sure it is on without toggling it off.
+const davidOn = async (p) => { if (!(await p.evaluate(() => window.__bidder.ctrl.david.enabled))) await p.click('[data-ref="davidPill"]'); };
 const text = (page, ref) => page.locator(`[data-ref="${ref}"]`).first().innerText();
 const state = (page) => page.evaluate(() => {
   const { ctrl, demo } = window.__bidder;
@@ -312,7 +314,7 @@ await run('end of auction: timer 00:00, bidding closed, server rejects late bids
 });
 
 await run('DAVID: Bulgarian voice speaks events; pause stops voice only; captions continue', { tts: true, query: '?seed=3&competitors=0' }, async (p) => {
-  await p.click('[data-ref="voiceToggle"]');
+  await davidOn(p);
   await p.evaluate(() => window.__bidder.demo.server.burst(1));
   await p.waitForFunction(() => window.__spoken.some((t) => t.includes('Чувам ли')), null, { timeout: 5000 });
   await p.click('[data-ref="pause"]');
@@ -333,7 +335,7 @@ await run('DAVID: Bulgarian voice speaks events; pause stops voice only; caption
 });
 
 await run('DAVID without a Bulgarian voice: captions-only fallback is explained', { query: '?seed=3&competitors=0' }, async (p) => {
-  await p.click('[data-ref="voiceToggle"]');
+  await davidOn(p);
   await p.waitForTimeout(1700);
   const v = await text(p, 'vstate');
   expect(v === 'САМО НАДПИСИ', `state ${v}`);
@@ -480,7 +482,7 @@ await run('DAVID audio slot: your recorded clip plays instead of the synthetic v
   },
 }, async (p) => {
   await p.waitForFunction(() => window.__bidder.ctrl.david.clips.size === 1, null, { timeout: 5000 });
-  await p.click('[data-ref="voiceToggle"]');
+  await davidOn(p);
   await p.evaluate(() => window.__bidder.demo.server.burst(1));
   await p.waitForFunction(() => window.__bidder.ctrl.david.playedClips.includes('new_bid'), null, { timeout: 5000 });
   await p.waitForTimeout(800);
@@ -648,20 +650,28 @@ await run('3D viewer: model loads (WebGL), drag rotates without errors', { query
   await p.mouse.down(); await p.mouse.move(box.x + box.width / 2 + 220, box.y + box.height / 2, { steps: 8 }); await p.mouse.up();
 });
 
-await run('white lobby: the Peugeot 206 real scan opens by default; switch to the concept and back', { query: '?lot=peugeot&seed=3&competitors=0' }, async (p) => {
-  expect((await p.evaluate(() => window.__bidder.ctrl.auction.lot.lotId)) === 'DEMO-0206', 'Peugeot lot by default');
-  await p.waitForFunction(() => document.querySelector('[data-ref="viewer"]').dataset.viewer === 'ready', null, { timeout: 60000 });
-  expect((await p.getAttribute('[data-ref="viewer"]', 'data-model')) === 'scan' && (await text(p, 'viewerTag')).includes('реален 3D скан'), 'real scan, quietly labelled');
-  expect((await text(p, 'lotTitle')) === 'Peugeot 206' && !(await p.locator('[data-ref="lotRetail"]').isVisible()), 'no invented retail value');
-  const bg = await p.evaluate(() => getComputedStyle(document.querySelector('.viewer-stage')).backgroundImage);
-  expect(bg.includes('255, 255, 255'), 'white lobby');
-  await p.screenshot({ path: join(shots, 'desktop-1440-lobby-peugeot.png') });
-  await p.click('[data-lotpick="DEMO-0001"]');
-  await p.waitForFunction(() => window.__bidder.ctrl.auction.lot.lotId === 'DEMO-0001' && document.querySelector('[data-ref="viewer"]').dataset.viewer === 'ready', null, { timeout: 60000 });
-  expect((await p.getAttribute('[data-ref="viewer"]', 'data-model')) === 'yes', 'concept model mounted');
-  expect((await p.locator('.viewer-canvas').count()) === 1, 'one canvas (old viewer destroyed)');
-  await p.click('[data-lotpick="DEMO-0206"]');
-  await p.waitForFunction(() => window.__bidder.ctrl.auction.lot.lotId === 'DEMO-0206');
+await run('white lobby: E&A concept lot (no Peugeot for now); DAVID pill switches voice + 3D subtitles; free bid amount', { tts: true, query: '?seed=3&competitors=0' }, async (p) => {
+  expect((await p.evaluate(() => window.__bidder.ctrl.auction.lot.lotId)) === 'DEMO-0001', 'concept lot');
+  expect((await p.locator('[data-lotpick]').count()) === 0, 'no car picker');
+  expect(await p.evaluate(() => window.__bidder.ctrl.david.enabled), 'DAVID on by default');
+  await p.click('[data-ref="davidPill"]');
+  expect(!(await p.evaluate(() => window.__bidder.ctrl.david.enabled)), 'pill turns DAVID off');
+  await p.evaluate(() => window.__bidder.demo.server.burst(1));
+  await p.waitForTimeout(400);
+  expect(!(await p.evaluate(() => document.querySelector('[data-ref="sub3d"]').classList.contains('on'))), 'no 3D subtitle while DAVID is off');
+  await p.click('[data-ref="davidPill"]');
+  expect(await p.evaluate(() => window.__bidder.ctrl.david.enabled), 'pill turns DAVID on');
+  await p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  expect(!(await p.evaluate(() => window.__bidder.ctrl.david.present)), 'hidden tab silences DAVID');
+  await p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  expect(await p.evaluate(() => window.__bidder.ctrl.david.present), 'back on the page');
+  await p.click('[data-ref="cta"]');
+  await p.waitForSelector('dialog[open]');
+  await p.fill('[data-ref="cfFree"]', '55 050');
+  await p.press('[data-ref="cfFree"]', 'Enter');
+  const amt = await p.evaluate(() => window.__bidder.ctrl.confirm.amount);
+  expect(amt >= 5_505_000 && amt % 10_000 === 0, `free amount rounded up to the step: ${amt}`);
+  await p.screenshot({ path: join(shots, 'desktop-1440-lobby-concept.png') });
 });
 
 await run('real bid endpoint refuses (501) and no request leaves the origin', { query: '?seed=3&competitors=0', allowErrors: /status of 501/ }, async (p) => {
@@ -706,7 +716,7 @@ await run('AiBidder budget: stop point, keep the money for another car, similar 
 });
 
 await run('AiBidder quick bids → confirm with that amount; 3D subtitles; DAVID calls like an auctioneer: "Чувам ли…", първи/втори/трети път, продадено', { tts: true, query: '?seed=3&competitors=0&opening=1' }, async (p) => {
-  await p.click('[data-ref="voiceToggle"]');
+  await davidOn(p);
   await p.click('[data-ref="aib"]');
   await p.waitForFunction(() => document.querySelectorAll('.aib-quick .qb').length === 4);
   const chips = await p.$$eval('.aib-quick .qb', (bs) => bs.map((b) => ({ a: Number(b.dataset.quick), t: b.innerText.replace(/\s+/g, ' ') })));

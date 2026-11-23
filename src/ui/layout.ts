@@ -69,17 +69,14 @@ export const APP_HTML = `
           <p class="lot-sub" data-ref="lotSub"></p>
           <ul class="specs" data-ref="specs" aria-label="Примерни характеристики"></ul>
           <p class="lot-retail" data-ref="lotRetail" hidden></p>
+          <p class="lot-vat" data-ref="lotVat"></p>
         </div>
       </div>
       <div class="viewer blk-viewer" data-ref="viewer">
         <div class="viewer-stage" aria-hidden="true"><i class="rig"></i><i class="ls w1"></i><i class="ls w2"></i><i class="ls r1"></i><i class="ls r2"></i><i class="ls r3"></i></div>
         <img class="viewer-poster" src="/media/demo-car-poster.webp" alt="E&amp;A концептуално купе — демонстрационен модел" width="1200" height="640" decoding="async">
         <span class="viewer-hint" aria-hidden="true">Плъзни, за да завъртиш</span>
-        <span class="viewer-tag" data-ref="viewerTag">ДЕМО · реален 3D скан</span>
-        <div class="viewer-pick" role="group" aria-label="ДЕМО автомобил">
-          <button type="button" data-lotpick="DEMO-0206" aria-pressed="false">Peugeot 206 · скан</button>
-          <button type="button" data-lotpick="DEMO-0001" aria-pressed="false">E&amp;A концепт</button>
-        </div>
+        <span class="viewer-tag" data-ref="viewerTag">ДЕМО · 3D концепт, не е реален автомобил</span>
         <span class="viewer-none">Няма снимки и 3D модел за този ДЕМО лот</span>
       </div>
       <div class="tiles blk-tiles">
@@ -267,6 +264,7 @@ export const APP_HTML = `
   </nav>
 </div>
 
+<button type="button" class="david-pill" data-ref="davidPill" aria-pressed="true" title="DAVID — глас и 3D надписи: включи / изключи"><span class="david-eq" aria-hidden="true"><i></i><i></i><i></i></span><span class="david-name">DAVID</span><span class="sr-only" data-ref="davidPillState">включен</span></button>
 <button type="button" class="aib" data-ref="aib" aria-expanded="false" aria-controls="aib-panel" aria-label="AiBidder — съвети">
   <span class="aib-ic" aria-hidden="true">${icon('spark')}</span><span class="aib-name">AiBidder</span><span class="aib-dot" aria-hidden="true"></span>
 </button>
@@ -374,6 +372,11 @@ export const APP_HTML = `
       <button type="button" class="btn ghost sm" data-raise="1000000">+10 000 €</button>
       <button type="button" class="btn ghost sm" data-raise="min">Мин.</button>
     </div>
+    <form class="cf-free" data-ref="cfFreeForm" novalidate>
+      <label for="cf-free-in">Или напиши своята сума — колкото искаш</label>
+      <div class="cf-free-row"><input id="cf-free-in" data-ref="cfFree" inputmode="numeric" autocomplete="off" placeholder="напр. 55 000" aria-describedby="cf-free-note"><span aria-hidden="true">€</span><button type="submit" class="btn ghost sm">Задай</button></div>
+      <p class="cf-free-note" id="cf-free-note" data-ref="cfFreeNote">От следващата валидна оферта до максимума на лота; закръгля се нагоре до стъпката.</p>
+    </form>
     <p class="cf-moved" data-ref="cfMoved" role="status" hidden></p>
     <label class="consent"><input type="checkbox" data-ref="consent"> <span>Потвърждавам оферта от <b data-ref="cfAmount2">—</b>. Разбирам, че в реален търг офертата е обвързваща.</span></label>
     <p class="cf-error" data-ref="cfError" role="alert" hidden></p>
