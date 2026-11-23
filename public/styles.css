@@ -591,3 +591,53 @@ html.hc .demo-strip { background: #000; color: #ffe08a; }
 .qb:not(:disabled):hover, .qb:not(:disabled):focus-visible { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(255,255,255,.6), 0 0 22px rgba(60,207,122,.55); }
 .qb:disabled { opacity: .42; cursor: not-allowed; }
 .aib-psy { margin: 6px 2px 0; font-size: .7rem; color: var(--muted); line-height: 1.4; }
+
+/* ---- Glow by who bid: you = green + white, someone else = red + yellow ---- */
+@keyframes num-glow-other {
+  0% { text-shadow: none; transform: scale(1); }
+  15% { color: #fff6d6; text-shadow: 0 0 6px #ffe08a, 0 0 18px rgba(242,193,78,.95), 0 0 38px rgba(229,55,69,.85); transform: scale(1.08); }
+  50% { color: #ffe3c2; text-shadow: 0 0 4px rgba(255,224,138,.7), 0 0 22px rgba(229,55,69,.65); transform: scale(1.02); }
+  100% { text-shadow: none; transform: scale(1); }
+}
+@keyframes tile-glow-other {
+  15% { border-color: rgba(242,193,78,.95); box-shadow: 0 0 0 1px rgba(255,224,138,.5), 0 0 28px rgba(229,55,69,.5), inset 0 0 22px rgba(242,193,78,.16); }
+  100% { box-shadow: none; }
+}
+.glow[data-glow="other"] { animation-name: num-glow-other; }
+.tile:has(.tile-val.glow[data-glow="other"]) { animation-name: tile-glow-other; }
+
+/* ---- Quick bids: 3D green/white numbers with a soft light inside the pill ---- */
+.qb, .qb * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.qb { -webkit-tap-highlight-color: transparent; border: 0; position: relative; overflow: hidden; min-height: 64px;
+  background: radial-gradient(120% 95% at 50% 0%, rgba(150,255,200,.30), rgba(30,110,66,.42) 42%, rgba(8,16,12,.96) 82%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.38), inset 0 -12px 22px rgba(0,0,0,.55), inset 0 0 22px rgba(60,207,122,.22), 0 6px 18px rgba(0,0,0,.45); }
+.qb::before { content: ""; position: absolute; left: 18%; right: 18%; top: 10%; height: 46%; border-radius: 999px; background: radial-gradient(ellipse at 50% 30%, rgba(255,255,255,.32), rgba(255,255,255,0) 70%); filter: blur(6px); pointer-events: none; }
+.qb b { position: relative; font-size: 1.2rem; letter-spacing: .01em;
+  background: linear-gradient(180deg, #ffffff 0%, #f1fff7 38%, #7ff3b1 68%, #22b763 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.75)) drop-shadow(0 2px 0 rgba(10,60,32,.9)) drop-shadow(0 0 8px rgba(60,207,122,.55)); }
+.qb-plus { position: relative; color: #c8ffdf; text-shadow: 0 0 6px rgba(60,207,122,.6); }
+.qb[data-min="true"] { background: radial-gradient(120% 95% at 50% 0%, rgba(255,255,255,.30), rgba(120,130,150,.30) 42%, rgba(10,12,16,.96) 82%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45), inset 0 -12px 22px rgba(0,0,0,.55), inset 0 0 22px rgba(255,255,255,.14), 0 6px 18px rgba(0,0,0,.45); }
+.qb[data-min="true"] b { background-image: linear-gradient(180deg, #ffffff 0%, #ffffff 45%, #cfd6e2 75%, #8e99ab 100%); filter: drop-shadow(0 1px 0 rgba(0,0,0,.75)) drop-shadow(0 2px 0 rgba(40,46,58,.9)) drop-shadow(0 0 8px rgba(255,255,255,.4)); }
+.qb:not(:disabled):hover, .qb:not(:disabled):focus-visible { box-shadow: inset 0 1px 0 rgba(255,255,255,.45), inset 0 0 26px rgba(60,207,122,.35), 0 0 0 1px rgba(255,255,255,.5), 0 0 24px rgba(60,207,122,.55); }
+.qb:disabled b { filter: grayscale(1) brightness(.8); }
+/* The container itself never animates; its options light up on every new bid. */
+.aib-quick.glow { display: grid; animation: none; transform: none; }
+@keyframes qb-flash-mine {
+  0% { box-shadow: inset 0 0 22px rgba(60,207,122,.22), 0 6px 18px rgba(0,0,0,.45); }
+  18% { box-shadow: inset 0 0 34px rgba(255,255,255,.55), inset 0 0 18px rgba(60,207,122,.9), 0 0 0 1px rgba(255,255,255,.7), 0 0 30px rgba(60,207,122,.85); }
+  100% { box-shadow: inset 0 0 22px rgba(60,207,122,.22), 0 6px 18px rgba(0,0,0,.45); }
+}
+@keyframes qb-flash-other {
+  0% { box-shadow: inset 0 0 22px rgba(60,207,122,.22), 0 6px 18px rgba(0,0,0,.45); }
+  18% { box-shadow: inset 0 0 34px rgba(255,224,138,.5), inset 0 0 18px rgba(229,55,69,.85), 0 0 0 1px rgba(255,224,138,.7), 0 0 30px rgba(229,55,69,.8); }
+  100% { box-shadow: inset 0 0 22px rgba(60,207,122,.22), 0 6px 18px rgba(0,0,0,.45); }
+}
+@keyframes qb-num-mine { 18% { filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 14px rgba(60,207,122,1)) brightness(1.25); transform: scale(1.07); } }
+@keyframes qb-num-other { 18% { filter: drop-shadow(0 0 4px #ffe08a) drop-shadow(0 0 14px rgba(229,55,69,1)) brightness(1.2); transform: scale(1.07); } }
+.aib-quick.glow[data-glow="mine"] .qb:not(:disabled) { animation: qb-flash-mine 1.3s ease-out; }
+.aib-quick.glow[data-glow="other"] .qb:not(:disabled) { animation: qb-flash-other 1.3s ease-out; }
+.aib-quick.glow[data-glow="mine"] .qb:not(:disabled) b { animation: qb-num-mine 1.3s ease-out; }
+.aib-quick.glow[data-glow="other"] .qb:not(:disabled) b { animation: qb-num-other 1.3s ease-out; }
+/* Long pages fade out at the bottom instead of ending in a cut-off strip. */
+.aib-page { padding-bottom: 34px; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 46px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 46px), transparent); }

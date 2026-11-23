@@ -419,7 +419,11 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     setText(ref('next'), next !== null ? formatEur(next) : '—');
     // New bid → the numbers glow green and white for a moment.
     if (top && top.bidId !== lastGlowBid) {
-      if (lastGlowBid !== '') for (const k of ['current', 'next', 'ctaAmount', 'cta2Amount']) glow(ref(k));
+      if (lastGlowBid !== '') {
+        // Your bid glows green and white; someone else's glows red and yellow.
+        const kind = top.bidderId === ctrl.adapter.bidderId ? 'mine' : 'other';
+        for (const k of ['current', 'next', 'ctaAmount', 'cta2Amount', 'aibQuick']) glow(ref(k), kind);
+      }
       lastGlowBid = top.bidId;
     }
     setText(ref('stepLine'), step !== null ? `Стъпка ${formatEur(step)}` : '');
@@ -648,8 +652,9 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
   }
 
   let lastGlowBid = '';
-  function glow(el: HTMLElement | null): void {
+  function glow(el: HTMLElement | null, kind: 'mine' | 'other'): void {
     if (!el) return;
+    el.dataset.glow = kind;
     el.classList.remove('glow');
     void el.offsetWidth; // restart the animation for every new bid
     el.classList.add('glow');
