@@ -417,14 +417,19 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     setText(ref('current'), top ? formatEur(top.amount) : lot ? formatEur(lot.startPrice) : '—');
     setText(ref('currentBy'), top ? (top.bidderId === ctrl.adapter.bidderId ? 'Твоя оферта' : top.bidderId) : lot ? `Няма оферти · старт от ${formatEur(lot.startPrice)}` : '');
     setText(ref('next'), next !== null ? formatEur(next) : '—');
-    // New bid → the numbers glow green and white for a moment.
-    if (top && top.bidId !== lastGlowBid) {
-      if (lastGlowBid !== '') {
-        // Your bid glows green and white; someone else's glows red and yellow.
-        const kind = top.bidderId === ctrl.adapter.bidderId ? 'mine' : 'other';
-        for (const k of ['current', 'next', 'ctaAmount', 'cta2Amount', 'aibQuick']) glow(ref(k), kind);
-      }
-      lastGlowBid = top.bidId;
+    // Auctioneer subtitle in 3D: your bid green/white, someone else's red/yellow.
+    const sub = ctrl.subtitle;
+    if (sub && sub.id !== lastSubtitle) {
+      lastSubtitle = sub.id;
+      const el = ref('sub3d');
+      el.dataset.tone = sub.tone;
+      setText(ref('sub3dMain'), sub.main);
+      setText(ref('sub3dSub'), sub.sub);
+      el.classList.remove('show', 'on');
+      void el.offsetWidth; // restart the animation for every call
+      el.classList.add('show', 'on');
+      clearTimeout(subTimer);
+      subTimer = setTimeout(() => el.classList.remove('show', 'on'), 2600);
     }
     setText(ref('stepLine'), step !== null ? `Стъпка ${formatEur(step)}` : '');
     const statusText = ended ? 'ДЕМО · Търгът приключи' : conn !== 'online' ? 'ДЕМО · Няма връзка — наддаването е спряно' : 'ДЕМО · Активен търг · Наддаване в реално време';
@@ -651,14 +656,8 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     lastAttemptState = now;
   }
 
-  let lastGlowBid = '';
-  function glow(el: HTMLElement | null, kind: 'mine' | 'other'): void {
-    if (!el) return;
-    el.dataset.glow = kind;
-    el.classList.remove('glow');
-    void el.offsetWidth; // restart the animation for every new bid
-    el.classList.add('glow');
-  }
+  let lastSubtitle = 0;
+  let subTimer: ReturnType<typeof setTimeout> | undefined;
   ctrl.subscribe(render);
   applyRoute(false);
 }

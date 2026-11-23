@@ -687,7 +687,7 @@ await run('AiBidder budget: stop point, keep the money for another car, similar 
   return lot.title;
 });
 
-await run('AiBidder quick bids → confirm with that amount; new bids glow; DAVID calls like an auctioneer: "Чувам ли…", първи/втори/трети път, продадено', { tts: true, query: '?seed=3&competitors=0&opening=1' }, async (p) => {
+await run('AiBidder quick bids → confirm with that amount; 3D subtitles; DAVID calls like an auctioneer: "Чувам ли…", първи/втори/трети път, продадено', { tts: true, query: '?seed=3&competitors=0&opening=1' }, async (p) => {
   await p.click('[data-ref="voiceToggle"]');
   await p.click('[data-ref="aib"]');
   await p.waitForFunction(() => document.querySelectorAll('.aib-quick .qb').length === 4);
@@ -701,10 +701,12 @@ await run('AiBidder quick bids → confirm with that amount; new bids glow; DAVI
   await p.click('[data-ref="cfSubmit"]');
   await p.waitForFunction((a) => window.__bidder.ctrl.auction.bids.at(-1)?.amount === a, chips[2].a, { timeout: 8000 });
   await p.waitForFunction(() => window.__spoken.some((t) => t.includes('твоята оферта') && t.includes('Чувам ли')), null, { timeout: 5000 });
-  expect((await p.getAttribute('[data-ref="current"]', 'data-glow')) === 'mine', 'your bid glows green');
+  await p.waitForSelector('[data-ref="sub3d"].show[data-tone="mine"]', { timeout: 5000 });
+  expect((await text(p, 'sub3dMain')).replace(/\s/g, '') === `${(chips[2].a / 100).toLocaleString('bg-BG').replace(/\s/g, '')}€` && (await text(p, 'sub3dSub')).includes('Твоята оферта'), '3D subtitle for your bid (green)');
   await p.evaluate(() => window.__bidder.demo.server.burst(1));
-  await p.waitForSelector('.tile-val.glow[data-glow="other"]', { timeout: 5000 });
-  expect((await p.getAttribute('[data-ref="aibQuick"]', 'data-glow')) === 'other', "someone else's bid flashes red/yellow on the options too");
+  await p.waitForSelector('[data-ref="sub3d"].show[data-tone="other"]', { timeout: 5000 });
+  expect((await text(p, 'sub3dSub')).includes('Чувам ли'), "3D subtitle for someone else's bid (red/yellow)");
+  expect((await p.locator('.glow').count()) === 0, 'no other glow effects');
   expect(await p.evaluate(() => getComputedStyle(document.querySelector('.qb')).userSelect === 'none'), 'option numbers cannot be text-selected');
   await p.waitForFunction(() => window.__spoken.some((t) => t.startsWith('Надминат си')), null, { timeout: 5000 });
   expect(await p.evaluate(() => window.__rates.some((r) => r > 1.2)), 'price calls are spoken faster');
@@ -712,6 +714,7 @@ await run('AiBidder quick bids → confirm with that amount; new bids glow; DAVI
   await p.waitForFunction(() => window.__bidder.ctrl.david.captions.some((c) => c.text.startsWith('Продадено за')), null, { timeout: 20_000 });
   const caps = await p.evaluate(() => window.__bidder.ctrl.david.captions.map((c) => c.text));
   for (const w of ['първи път!', 'втори път!', 'трети път!', 'Продадено за', 'да заплати']) expect(caps.some((c) => c.includes(w)), `called: ${w}`);
+  expect((await text(p, 'sub3dMain')) === 'ПРОДАДЕНО!', '3D subtitle: ПРОДАДЕНО!');
   expect(!caps.join(' ').toLowerCase().includes('тромпет'), 'no trumpets');
   return caps.filter((c) => /път!|Продадено/.test(c)).join(' → ');
 });

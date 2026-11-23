@@ -565,21 +565,6 @@ html.hc .demo-strip { background: #000; color: #ffe08a; }
 .viewer[data-model="none"] canvas, .viewer[data-model="none"] .viewer-poster, .viewer[data-model="none"] .viewer-tag, .viewer[data-model="none"] .viewer-hint { display: none !important; }
 .viewer[data-model="none"] .viewer-none { display: grid; place-items: center; position: absolute; inset: 0; z-index: 2; font-size: .82rem; color: var(--muted); text-align: center; padding: 16px; }
 
-/* New bid: numbers glow green and white */
-@keyframes num-glow {
-  0% { text-shadow: none; transform: scale(1); }
-  15% { color: #fff; text-shadow: 0 0 6px #fff, 0 0 18px rgba(60,207,122,.95), 0 0 38px rgba(60,207,122,.75); transform: scale(1.08); }
-  50% { color: #d6ffe6; text-shadow: 0 0 4px rgba(255,255,255,.7), 0 0 22px rgba(60,207,122,.65); transform: scale(1.02); }
-  100% { text-shadow: none; transform: scale(1); }
-}
-@keyframes tile-glow {
-  15% { border-color: rgba(60,207,122,.95); box-shadow: 0 0 0 1px rgba(255,255,255,.5), 0 0 28px rgba(60,207,122,.45), inset 0 0 22px rgba(60,207,122,.18); }
-  100% { box-shadow: none; }
-}
-.glow { display: inline-block; animation: num-glow 1.3s ease-out; }
-.tile:has(.tile-val.glow) { animation: tile-glow 1.3s ease-out; }
-.cta .glow { animation-duration: 1s; }
-
 /* AiBidder: how much to bid — round quick options */
 .aib-quick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
 .qb { min-height: 58px; border-radius: 999px; border: 1px solid rgba(60,207,122,.45); background: radial-gradient(ellipse at 50% 0%, rgba(60,207,122,.18), rgba(10,12,16,.9) 70%); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; cursor: pointer; font: inherit; padding: 4px 10px; transition: transform .15s, box-shadow .2s; }
@@ -591,20 +576,6 @@ html.hc .demo-strip { background: #000; color: #ffe08a; }
 .qb:not(:disabled):hover, .qb:not(:disabled):focus-visible { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(255,255,255,.6), 0 0 22px rgba(60,207,122,.55); }
 .qb:disabled { opacity: .42; cursor: not-allowed; }
 .aib-psy { margin: 6px 2px 0; font-size: .7rem; color: var(--muted); line-height: 1.4; }
-
-/* ---- Glow by who bid: you = green + white, someone else = red + yellow ---- */
-@keyframes num-glow-other {
-  0% { text-shadow: none; transform: scale(1); }
-  15% { color: #fff6d6; text-shadow: 0 0 6px #ffe08a, 0 0 18px rgba(242,193,78,.95), 0 0 38px rgba(229,55,69,.85); transform: scale(1.08); }
-  50% { color: #ffe3c2; text-shadow: 0 0 4px rgba(255,224,138,.7), 0 0 22px rgba(229,55,69,.65); transform: scale(1.02); }
-  100% { text-shadow: none; transform: scale(1); }
-}
-@keyframes tile-glow-other {
-  15% { border-color: rgba(242,193,78,.95); box-shadow: 0 0 0 1px rgba(255,224,138,.5), 0 0 28px rgba(229,55,69,.5), inset 0 0 22px rgba(242,193,78,.16); }
-  100% { box-shadow: none; }
-}
-.glow[data-glow="other"] { animation-name: num-glow-other; }
-.tile:has(.tile-val.glow[data-glow="other"]) { animation-name: tile-glow-other; }
 
 /* ---- Quick bids: 3D green/white numbers with a soft light inside the pill ---- */
 .qb, .qb * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -621,23 +592,26 @@ html.hc .demo-strip { background: #000; color: #ffe08a; }
 .qb[data-min="true"] b { background-image: linear-gradient(180deg, #ffffff 0%, #ffffff 45%, #cfd6e2 75%, #8e99ab 100%); filter: drop-shadow(0 1px 0 rgba(0,0,0,.75)) drop-shadow(0 2px 0 rgba(40,46,58,.9)) drop-shadow(0 0 8px rgba(255,255,255,.4)); }
 .qb:not(:disabled):hover, .qb:not(:disabled):focus-visible { box-shadow: inset 0 1px 0 rgba(255,255,255,.45), inset 0 0 26px rgba(60,207,122,.35), 0 0 0 1px rgba(255,255,255,.5), 0 0 24px rgba(60,207,122,.55); }
 .qb:disabled b { filter: grayscale(1) brightness(.8); }
-/* The container itself never animates; its options light up on every new bid. */
-.aib-quick.glow { display: grid; animation: none; transform: none; }
-@keyframes qb-flash-mine {
-  0% { box-shadow: inset 0 0 22px rgba(60,207,122,.22), 0 6px 18px rgba(0,0,0,.45); }
-  18% { box-shadow: inset 0 0 34px rgba(255,255,255,.55), inset 0 0 18px rgba(60,207,122,.9), 0 0 0 1px rgba(255,255,255,.7), 0 0 30px rgba(60,207,122,.85); }
-  100% { box-shadow: inset 0 0 22px rgba(60,207,122,.22), 0 6px 18px rgba(0,0,0,.45); }
-}
-@keyframes qb-flash-other {
-  0% { box-shadow: inset 0 0 22px rgba(60,207,122,.22), 0 6px 18px rgba(0,0,0,.45); }
-  18% { box-shadow: inset 0 0 34px rgba(255,224,138,.5), inset 0 0 18px rgba(229,55,69,.85), 0 0 0 1px rgba(255,224,138,.7), 0 0 30px rgba(229,55,69,.8); }
-  100% { box-shadow: inset 0 0 22px rgba(60,207,122,.22), 0 6px 18px rgba(0,0,0,.45); }
-}
-@keyframes qb-num-mine { 18% { filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 14px rgba(60,207,122,1)) brightness(1.25); transform: scale(1.07); } }
-@keyframes qb-num-other { 18% { filter: drop-shadow(0 0 4px #ffe08a) drop-shadow(0 0 14px rgba(229,55,69,1)) brightness(1.2); transform: scale(1.07); } }
-.aib-quick.glow[data-glow="mine"] .qb:not(:disabled) { animation: qb-flash-mine 1.3s ease-out; }
-.aib-quick.glow[data-glow="other"] .qb:not(:disabled) { animation: qb-flash-other 1.3s ease-out; }
-.aib-quick.glow[data-glow="mine"] .qb:not(:disabled) b { animation: qb-num-mine 1.3s ease-out; }
-.aib-quick.glow[data-glow="other"] .qb:not(:disabled) b { animation: qb-num-other 1.3s ease-out; }
 /* Long pages fade out at the bottom instead of ending in a cut-off strip. */
 .aib-page { padding-bottom: 34px; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 46px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 46px), transparent); }
+
+/* ---- 3D auctioneer subtitle: shown only while calling (bid · първи/втори/трети път · продадено) ---- */
+.sub3d { position: fixed; left: 50%; bottom: calc(214px + var(--safe-b, 0px)); z-index: 60; transform: translateX(-50%); width: min(92vw, 720px); text-align: center; pointer-events: none; opacity: 0; perspective: 600px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.sub3d-main { font-family: Montserrat, system-ui, sans-serif; font-weight: 900; font-size: clamp(2.3rem, 9vw, 4.2rem); line-height: 1.05; letter-spacing: .01em; white-space: nowrap;
+  background: linear-gradient(180deg, #ffffff 0%, #f3fff8 36%, #84f5b6 66%, #1fae5c 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 1px 0 #0f5a31) drop-shadow(0 1px 0 #0d4f2b) drop-shadow(0 1px 0 #0b4425) drop-shadow(0 1px 0 #093a1f) drop-shadow(0 2px 0 #062a16) drop-shadow(0 6px 10px rgba(0,0,0,.75)) drop-shadow(0 0 18px rgba(60,207,122,.55)); }
+.sub3d-sub { font-weight: 800; font-size: clamp(.95rem, 3.6vw, 1.3rem); color: #eafff3; padding: 4px 14px; border-radius: 999px; background: rgba(6,10,8,.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); text-shadow: 0 0 10px rgba(60,207,122,.7); }
+.sub3d-sub:empty { display: none; }
+.sub3d[data-tone="other"] .sub3d-main { background-image: linear-gradient(180deg, #fffbe9 0%, #ffe9a6 34%, #ffb347 62%, #e53745 100%);
+  filter: drop-shadow(0 1px 0 #7a1a20) drop-shadow(0 1px 0 #6a161c) drop-shadow(0 1px 0 #5a1218) drop-shadow(0 1px 0 #4a0f14) drop-shadow(0 2px 0 #320a0d) drop-shadow(0 6px 10px rgba(0,0,0,.75)) drop-shadow(0 0 18px rgba(229,55,69,.6)); }
+.sub3d[data-tone="other"] .sub3d-sub { color: #fff1d0; text-shadow: 0 0 10px rgba(229,55,69,.75); }
+.sub3d.show { animation: sub3d-in 2.6s cubic-bezier(.2,.9,.25,1.1) both; }
+@keyframes sub3d-in {
+  0% { opacity: 0; transform: translateX(-50%) rotateX(55deg) scale(.6); }
+  12% { opacity: 1; transform: translateX(-50%) rotateX(0deg) scale(1.06); }
+  20% { transform: translateX(-50%) scale(1); }
+  80% { opacity: 1; transform: translateX(-50%) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(.98); }
+}
+@media (min-width: 1024px) { .sub3d { bottom: 48px; left: calc(50% - 190px); } }
+.sub3d.on { opacity: 1; } /* reduced motion: shown without animation, hidden by a timer */

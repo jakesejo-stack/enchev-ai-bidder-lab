@@ -33,6 +33,8 @@ export interface ConfirmState {
 export interface Settings { speakAdvice: boolean; highContrast: boolean; rate: number; }
 
 const STORE_KEY = 'enchev-ai-bidder-lab:v1';
+export interface Subtitle { id: number; main: string; sub: string; tone: 'mine' | 'other'; }
+
 const THRESHOLDS = [60_000, 30_000];
 /** Auctioneer calls on the current highest bid; re-armed by every new bid or extension. */
 const CALLS: [number, string][] = [[9_000, 'първи път'], [6_000, 'втори път'], [3_000, 'трети път']];
@@ -53,6 +55,9 @@ export class Controller {
   cap: Cents | null = null;
   attempts: BidAttempt[] = [];
   log: LogEntry[] = [];
+  /** 3D on-screen subtitle for the auctioneer's calls (bid, going once/twice/three times, sold). */
+  subtitle: Subtitle | null = null;
+  private subtitleId = 0;
   /** Local time of the last anti-sniping extension (for the УДЪЛЖЕН badge). */
   extendedAt: number | null = null;
   /** Anti-sniping extensions seen in this auction (for AI Info statistics). */
@@ -191,7 +196,10 @@ export class Controller {
         // Auctioneer chant: the amount, then "do I hear" the next valid bid.
         this.called.clear();
         const { lot, rules } = this.auction;
-        const ask = lot && rules ? ` Чувам ли ${speakEur(nextValidBid(lot, rules, this.auction.bids))}?` : '';
+        const nv = lot && rules ? nextValidBid(lot, rules, this.auction.bids) : null;
+        const ask = nv !== null ? ` Чувам ли ${speakEur(nv)}?` : '';
+        const askSub = nv !== null ? `Чувам ли ${formatEur(nv)}?` : '';
+        this.showSubtitle(formatEur(e.bid.amount), mine ? `Твоята оферта · ${askSub}` : wasLeading ? `Надминат си · ${askSub}` : askSub, mine ? 'mine' : 'other');
         if (mine) this.david.say(`${speakEur(e.bid.amount)} — твоята оферта!${ask}`, 'event', 'price', 'you_lead', true);
         else if (wasLeading) this.david.say(`Надминат си: ${speakEur(e.bid.amount)}!${ask}`, 'alert', 'price', 'outbid', true);
         else this.david.say(`${speakEur(e.bid.amount)}!${ask}`, 'event', 'price', 'new_bid', true);
@@ -214,6 +222,7 @@ export class Controller {
           const top = highestBid(this.auction.bids);
           const mine = top?.bidderId === this.adapter.bidderId;
           const demo = this.auction.lot?.demo ? ' Това е демо — нищо не се плаща.' : '';
+          if (top) this.showSubtitle('ПРОДАДЕНО!', `за ${formatEur(top.amount)}${mine ? ' · печелиш ти' : ''}`, mine ? 'mine' : 'other');
           this.david.say(!top ? 'Търгът приключи без оферти.'
             : mine ? `Продадено за ${speakEur(top.amount)}! Поздравления — печелиш ти! Моля, заплати по фактурата в срок.${demo}`
             : `Продадено за ${speakEur(top.amount)}! Моля, победителят да заплати по фактурата в срок.${demo}`, 'alert', undefined, mine ? 'ended_won' : 'ended', true);
@@ -280,7 +289,10 @@ export class Controller {
       for (const [t, call] of CALLS) {
         if (rem <= t && rem > t - 2000 && !this.called.has(t)) {
           this.called.add(t);
-          if (top) this.david.say(`${speakEur(top.amount)} — ${call}!`, 'alert', 'call', undefined, true);
+          if (top) {
+            this.david.say(`${speakEur(top.amount)} — ${call}!`, 'alert', 'call', undefined, true);
+            this.showSubtitle(`${call[0]!.toUpperCase()}${call.slice(1)}!`, formatEur(top.amount), top.bidderId === this.adapter.bidderId ? 'mine' : 'other');
+          }
           else if (t === CALLS[0]![0] && this.nextValid !== null) this.david.say(`Още няма оферти. Чувам ли ${speakEur(this.nextValid)}?`, 'alert', 'call', undefined, true);
         } else if (rem <= t - 2000) {
           this.called.add(t);
@@ -289,6 +301,10 @@ export class Controller {
     }
     this.refreshAdvice();
     this.notify();
+  }
+
+  private showSubtitle(main: string, sub: string, tone: 'mine' | 'other'): void {
+    this.subtitle = { id: ++this.subtitleId, main, sub, tone };
   }
 
   // ---------------------------------------------------------------- user actions

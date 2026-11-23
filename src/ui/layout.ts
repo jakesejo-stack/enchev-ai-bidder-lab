@@ -257,6 +257,7 @@ export const APP_HTML = `
   <div class="bidbar">
     <button type="button" class="cta" data-ref="cta2">${ctaInner('cta2')}</button>
   </div>
+  <div class="sub3d" data-ref="sub3d" aria-hidden="true"><b class="sub3d-main" data-ref="sub3dMain"></b><span class="sub3d-sub" data-ref="sub3dSub"></span></div>
   <nav class="bottomnav" aria-label="Навигация">
     ${mobileNav.map(([r, i, l]) => `<a href="#/${r}" data-nav="${r}">${icon(i)}<span>${l}</span></a>`).join('')}
   </nav>
