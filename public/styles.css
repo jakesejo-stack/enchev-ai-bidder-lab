@@ -615,3 +615,29 @@ html.hc .demo-strip { background: #000; color: #ffe08a; }
 }
 @media (min-width: 1024px) { .sub3d { bottom: 48px; left: calc(50% - 190px); } }
 .sub3d.on { opacity: 1; } /* reduced motion: shown without animation, hidden by a timer */
+
+/* ---------------- White lobby (3D showroom) ---------------- */
+.viewer { background: radial-gradient(ellipse at 50% 108%, #e4e6ea, #f7f8fa 62%, #ffffff); border-color: rgba(255,255,255,.18); }
+.viewer::after { background: linear-gradient(180deg, rgba(255,255,255,0) 70%, rgba(214,218,224,.35)); }
+.viewer-stage { background:
+    radial-gradient(50% 34% at 50% -6%, rgba(255,255,255,1), transparent 72%),
+    radial-gradient(70% 30% at 50% 104%, rgba(196,200,208,.55), transparent 72%),
+    linear-gradient(180deg, #ffffff 0%, #f5f6f8 52%, #e6e8ec 100%); }
+.viewer-stage .rig { background: linear-gradient(90deg, transparent, #fff 18%, #fff 82%, transparent); box-shadow: 0 0 22px 8px rgba(255,255,255,.9), 0 2px 14px rgba(160,166,176,.35); }
+.viewer-stage .ls.w1, .viewer-stage .ls.w2, .viewer-stage .ls.r1, .viewer-stage .ls.r2, .viewer-stage .ls.r3 { background: linear-gradient(180deg, transparent, #ffffff 16%, #ffffff 84%, transparent); box-shadow: 0 0 10px 2px rgba(255,255,255,.95), 0 0 2px 1px rgba(170,176,186,.45); opacity: .9; }
+.viewer-stage .ls.r1 { background: linear-gradient(180deg, transparent, #e53745 16%, #e53745 84%, transparent); box-shadow: 0 0 10px 2px rgba(229,55,69,.35); opacity: .7; width: 2px; }
+.viewer[data-model="scan"] .viewer-poster { display: none; }
+/* Small, quiet labels — no "sticker" over the car */
+.viewer-tag { top: auto; right: auto; left: 14px; bottom: 12px; padding: 0; background: none; border: 0; border-radius: 0; color: #6b7280; font-size: .62rem; letter-spacing: .08em; font-weight: 700; }
+.viewer-hint { left: auto; right: 14px; bottom: 10px; background: rgba(255,255,255,.75); color: #3d4350; border-color: rgba(0,0,0,.08); }
+.viewer-none { color: #6b7280 !important; }
+.viewer-pick { position: absolute; z-index: 3; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; padding: 3px; border-radius: 999px; background: rgba(255,255,255,.82); box-shadow: 0 4px 16px rgba(0,0,0,.12); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.viewer-pick button { min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: #3d4350; font: 700 .72rem/1 inherit; letter-spacing: .04em; cursor: pointer; white-space: nowrap; }
+.viewer-pick button[aria-pressed="true"] { background: #0c0d11; color: #fff; }
+.viewer-pick button:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+@media (max-width: 1023px) { .viewer-pick button { min-height: 40px; padding: 0 12px; font-size: .68rem; } }
+@media (max-width: 1023px) {
+  .viewer-pick { top: auto; bottom: 10px; }
+  .viewer-hint { display: none !important; }
+  .viewer-tag { bottom: auto; top: 12px; }
+}

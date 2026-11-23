@@ -1,6 +1,7 @@
 // Entry point. DEMO MODE only: a simulated in-browser auction server. Real mode stays disabled
 // until an authorised Enchev Auctions endpoint is configured (see src/config.ts).
 import { DemoAdapter } from './adapters/demo-adapter.js';
+import { DEMO_LOT, PEUGEOT_LOT } from './adapters/demo-lots.js';
 import { Controller } from './app/controller.js';
 import { mountApp } from './ui/render.js';
 import { CONFIG } from './config.js';
@@ -28,6 +29,8 @@ const demo = new DemoAdapter(
     ...(skew !== undefined ? { clockSkewMs: skew } : {}),
     competitors: q.get('competitors') !== '0',
     openingBids: q.get('opening') === '1',
+    // The user's own Peugeot 206 (real 3D scan) by default; ?lot=concept opens the E&A concept lot.
+    lot: q.get('lot') === 'concept' ? DEMO_LOT : PEUGEOT_LOT,
   },
   {
     unstable: q.get('unstable') === '1',

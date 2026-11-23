@@ -16,7 +16,7 @@ import { availableSources, defaultSource, demoAllowed, type SourceKind } from '.
 import { generateDemoHistory } from '../analytics/demo-history.js';
 import { similarLots } from '../domain/similar.js';
 import { quickBids } from '../domain/advisor.js';
-import { DEMO_LOT, SIMILAR_LOTS } from '../adapters/demo-lots.js';
+import { DEMO_LOT, PEUGEOT_LOT, SIMILAR_LOTS } from '../adapters/demo-lots.js';
 
 const ROUTES = ['live', 'dashboard', 'ai', 'bids', 'history', 'real', 'settings'] as const;
 type Route = (typeof ROUTES)[number];
@@ -236,14 +236,28 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     poster.addEventListener('error', hide);
     if (poster.complete && poster.naturalWidth === 0) hide();
   }
-  let viewerStarted = false;
-  function startViewer(url: string): void {
-    if (viewerStarted) return;
-    viewerStarted = true;
+  // The 3D viewer follows the lot: a lot change with another model remounts it.
+  let viewerUrl = '';
+  let viewerHandle: { destroy(): void } | null = null;
+  function startViewer(lot: { modelUrl?: string; modelScan?: boolean; modelLength?: number }): void {
+    const url = lot.modelUrl ?? '';
+    if (url === viewerUrl) return;
+    viewerUrl = url;
+    viewerHandle?.destroy();
+    viewerHandle = null;
+    if (!url) return;
     import('../viewer/viewer.js').then(({ mountViewer }) => {
-      mountViewer(viewerHost, { modelUrl: url, reducedMotion: reduceMotion, maxDpr: matchMedia('(pointer: coarse)').matches ? 1.5 : 1.75 });
+      if (viewerUrl !== url) return;
+      viewerHandle = mountViewer(viewerHost, { modelUrl: url, scan: !!lot.modelScan, length: lot.modelLength, reducedMotion: reduceMotion, maxDpr: matchMedia('(pointer: coarse)').matches ? 1.5 : 1.75 });
     }).catch(() => { viewerHost.dataset.viewer = 'fallback'; });
   }
+  // DEMO: switch between the Peugeot 206 scan and the E&A concept (a new demo auction for that car).
+  viewerHost.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-lotpick]');
+    if (!b || !demo) return;
+    const target = [PEUGEOT_LOT, DEMO_LOT, ...SIMILAR_LOTS].find((l) => l.lotId === b.dataset.lotpick);
+    if (target && target.lotId !== ctrl.auction.lot?.lotId) { demo.server.switchLot(target); toast(`ДЕМО: нов търг за ${target.title}`, 'info'); }
+  });
 
   // ------------------------------------------------------------ inputs
   const rate = ref<HTMLSelectElement>('rate');
@@ -389,8 +403,12 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     document.documentElement.dataset.conn = conn;
     document.documentElement.dataset.ended = String(ended);
 
-    if (lot && !viewerStarted && lot.modelUrl) startViewer(lot.modelUrl);
-    if (lot) viewerHost.dataset.model = lot.modelUrl ? 'yes' : 'none';
+    if (lot) {
+      startViewer(lot);
+      viewerHost.dataset.model = lot.modelUrl ? (lot.modelScan ? 'scan' : 'yes') : 'none';
+      setText(ref('viewerTag'), lot.modelScan ? 'ДЕМО · реален 3D скан' : lot.modelUrl ? 'ДЕМО · 3D концепт, не е реален автомобил' : '');
+      viewerHost.querySelectorAll<HTMLElement>('[data-lotpick]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lotpick === lot.lotId)));
+    }
 
     // Top bar
     setText(ref('timer'), lot ? formatCountdown(rem) : '--:--');

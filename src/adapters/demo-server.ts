@@ -19,6 +19,8 @@ export interface DemoServerOptions {
   competitors?: boolean;
   /** Seed a short opening history (40 000 → 42 500 €) instead of starting from 0 € (tests / demos). */
   openingBids?: boolean;
+  /** Lot to start with (default DEMO_LOT). */
+  lot?: LotInfo;
 }
 
 export { DEMO_LOT } from './demo-lots.js';
@@ -66,7 +68,7 @@ export class DemoAuctionServer {
   private bidCounter = 0;
   readonly skew: number;
   private readonly localNow: () => number;
-  lot: LotInfo = DEMO_LOT;
+  lot: LotInfo;
   readonly rules = DEMO_RULES;
   private activity: number;
   private simulateCompetitors: boolean;
@@ -74,6 +76,7 @@ export class DemoAuctionServer {
   readonly audit: { at: number; bidderId: string; amount: number; result: string; key: string }[] = [];
 
   constructor(private opts: DemoServerOptions = {}) {
+    this.lot = opts.lot ?? DEMO_LOT;
     this.rand = mulberry32(opts.seed ?? 20261122);
     this.skew = opts.clockSkewMs ?? 2300;
     this.localNow = opts.now ?? (() => Date.now());
@@ -102,7 +105,7 @@ export class DemoAuctionServer {
       });
     }
     // Competitors' private maxima: 55–85 % of the lot's declared retail value (rounded to 500 €).
-    const retail = this.lot.retailValue ?? euros(60_000);
+    const retail = this.lot.retailValue ?? this.lot.demoPriceRef ?? euros(60_000);
     const maxAt = (lo: number, spread: number) => Math.round((retail * (lo + this.rand() * spread)) / euros(500)) * euros(500);
     this.competitors = [
       { id: 'Участник 3', max: maxAt(0.6, 0.25), eagerness: 0.55 },
@@ -176,7 +179,7 @@ export class DemoAuctionServer {
   competitorAmount(c: Competitor, next: number): number {
     const step = currentStep(this.lot, this.rules, this.bids);
     const top = highestBid(this.bids);
-    const retail = this.lot.retailValue ?? euros(60_000);
+    const retail = this.lot.retailValue ?? this.lot.demoPriceRef ?? euros(60_000);
     let amount = next;
     if ((top ? top.amount : 0) < retail * 0.5) amount = next + Math.round((retail * (0.03 + this.rand() * 0.06)) / step) * step;
     if (amount > c.max) amount = next + Math.floor((c.max - next) / step) * step;

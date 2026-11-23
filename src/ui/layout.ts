@@ -75,7 +75,11 @@ export const APP_HTML = `
         <div class="viewer-stage" aria-hidden="true"><i class="rig"></i><i class="ls w1"></i><i class="ls w2"></i><i class="ls r1"></i><i class="ls r2"></i><i class="ls r3"></i></div>
         <img class="viewer-poster" src="/media/demo-car-poster.webp" alt="E&amp;A концептуално купе — демонстрационен модел" width="1200" height="640" decoding="async">
         <span class="viewer-hint" aria-hidden="true">Плъзни, за да завъртиш</span>
-        <span class="viewer-tag">ДЕМО КОНЦЕПТ · не е реален автомобил</span>
+        <span class="viewer-tag" data-ref="viewerTag">ДЕМО · реален 3D скан</span>
+        <div class="viewer-pick" role="group" aria-label="ДЕМО автомобил">
+          <button type="button" data-lotpick="DEMO-0206" aria-pressed="false">Peugeot 206 · скан</button>
+          <button type="button" data-lotpick="DEMO-0001" aria-pressed="false">E&amp;A концепт</button>
+        </div>
         <span class="viewer-none">Няма снимки и 3D модел за този ДЕМО лот</span>
       </div>
       <div class="tiles blk-tiles">

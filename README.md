@@ -19,7 +19,7 @@ Desktop and mobile layouts follow the ENCHEV AI Bidder reference concepts (black
 - **Табло · Аналитика**: LIVE / 24Ч / 7Д / 30Д / custom dates — bidding activity, unique bidders, completed auctions, timer extensions, duration, price growth, completed-auction table and CSV export, aggregated only from server-published auction events. REAL and DEMO sources never mix; a real-mode build shows only real data (none recorded yet) — see [docs/ANALYTICS.md](docs/ANALYTICS.md).
 - **Реални данни (read-only)**: `#/real` shows Enchev Auctions service readiness and verified real lots (with countdowns) through a GET-only, allow-listed bridge (`api/enchev.js`). No real bids exist upstream yet, and real bid submission stays disabled — see [docs/ENCHEV_REAL_DATA.md](docs/ENCHEV_REAL_DATA.md).
 - Connection loss, browser offline, unstable network (drops/reorder/duplicates) with gap detection and resync.
-- 3D **showroom**: the car on a glowing turntable podium (drag/arrow keys). Uses the original E&A concept model; adding an approved `public/models/porsche-911-gt3.glb` switches the demo lot to the Porsche 911 GT3 automatically at build time.
+- 3D **showroom** in a **white lobby**: the car on a white turntable podium (drag/arrow keys). Opens with the owner's **Peugeot 206 real 3D scan** (`public/models/peugeot-scan-lite.glb`, from the enchev-auctions-private project); a switch above the car opens the E&A concept lot instead (`?lot=concept`). Uses the original E&A concept model; adding an approved `public/models/porsche-911-gt3.glb` switches the demo lot to the Porsche 911 GT3 automatically at build time.
 - Accessibility: keyboard, focus management, ARIA live regions, reduced motion, high contrast, 44 px targets, safe areas.
 
 ## Commands

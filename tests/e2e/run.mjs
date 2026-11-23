@@ -73,7 +73,9 @@ async function run(name, opts, fn) {
   let status = 'pass', detail = '';
   try {
     if (opts.before) await opts.before(page);
-    await page.goto(`${base}/${opts.query ?? '?seed=3'}`);
+    // Existing scenarios run on the E&A concept lot (fixed sample values); the app opens the Peugeot 206 scan by default.
+    const qy = opts.query ?? '?seed=3';
+    await page.goto(`${base}/${/[?&]lot=/.test(qy) || !qy.startsWith('?') ? qy : qy.replace(/^\?/, '?lot=concept&')}`);
     await page.waitForFunction(() => window.__bidder?.ctrl.auction.lot && window.__bidder.ctrl.connection === 'online', null, { timeout: 15000 });
     detail = (await fn(page, ctx)) ?? '';
     const unexpected = errors.filter((e) => !(opts.allowErrors && opts.allowErrors.test(e)));
@@ -639,11 +641,27 @@ await run('analytics (phone 390): no overflow; filters, CSV and compact list usa
 await run('3D viewer: model loads (WebGL), drag rotates without errors', { query: '?seed=3&competitors=0' }, async (p) => {
   await p.waitForFunction(() => document.querySelector('[data-ref="viewer"]').dataset.viewer === 'ready', null, { timeout: 30000 });
   expect((await p.getAttribute('[data-ref="viewer"]', 'data-showroom')) === 'podium', 'showroom with podium');
-  expect((await p.getAttribute('[data-ref="viewer"]', 'data-lights')) === 'studio', 'studio lights on the car');
+  expect((await p.getAttribute('[data-ref="viewer"]', 'data-lights')) === 'studio-white', 'white studio lights on the car');
   expect((await p.locator('.viewer-stage .ls').count()) === 5 && (await p.locator('.viewer-stage .rig').isVisible()), 'showroom wall with light strips and ceiling rig');
   const box = await p.locator('.viewer-canvas').boundingBox();
   await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await p.mouse.down(); await p.mouse.move(box.x + box.width / 2 + 220, box.y + box.height / 2, { steps: 8 }); await p.mouse.up();
+});
+
+await run('white lobby: the Peugeot 206 real scan opens by default; switch to the concept and back', { query: '?lot=peugeot&seed=3&competitors=0' }, async (p) => {
+  expect((await p.evaluate(() => window.__bidder.ctrl.auction.lot.lotId)) === 'DEMO-0206', 'Peugeot lot by default');
+  await p.waitForFunction(() => document.querySelector('[data-ref="viewer"]').dataset.viewer === 'ready', null, { timeout: 60000 });
+  expect((await p.getAttribute('[data-ref="viewer"]', 'data-model')) === 'scan' && (await text(p, 'viewerTag')).includes('реален 3D скан'), 'real scan, quietly labelled');
+  expect((await text(p, 'lotTitle')) === 'Peugeot 206' && !(await p.locator('[data-ref="lotRetail"]').isVisible()), 'no invented retail value');
+  const bg = await p.evaluate(() => getComputedStyle(document.querySelector('.viewer-stage')).backgroundImage);
+  expect(bg.includes('255, 255, 255'), 'white lobby');
+  await p.screenshot({ path: join(shots, 'desktop-1440-lobby-peugeot.png') });
+  await p.click('[data-lotpick="DEMO-0001"]');
+  await p.waitForFunction(() => window.__bidder.ctrl.auction.lot.lotId === 'DEMO-0001' && document.querySelector('[data-ref="viewer"]').dataset.viewer === 'ready', null, { timeout: 60000 });
+  expect((await p.getAttribute('[data-ref="viewer"]', 'data-model')) === 'yes', 'concept model mounted');
+  expect((await p.locator('.viewer-canvas').count()) === 1, 'one canvas (old viewer destroyed)');
+  await p.click('[data-lotpick="DEMO-0206"]');
+  await p.waitForFunction(() => window.__bidder.ctrl.auction.lot.lotId === 'DEMO-0206');
 });
 
 await run('real bid endpoint refuses (501) and no request leaves the origin', { query: '?seed=3&competitors=0', allowErrors: /status of 501/ }, async (p) => {

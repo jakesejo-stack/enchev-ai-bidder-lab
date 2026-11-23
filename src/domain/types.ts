@@ -21,6 +21,12 @@ export interface LotInfo {
   /** True for simulated lots. Demo lots must never be presented as real auctions. */
   demo: boolean;
   modelUrl?: string;
+  /** The 3D model is a real photogrammetry scan (lighting is baked into its textures). */
+  modelScan?: boolean;
+  /** Length the 3D model is scaled to on the podium (m); default 4.6. */
+  modelLength?: number;
+  /** DEMO only: price level the simulated competitors bid around (never shown, not an estimate). */
+  demoPriceRef?: Cents;
   /** Full characteristics of the vehicle (all listing fields). */
   details?: LotSpec[];
   /** Retail value DECLARED for the lot (seller / listing data) — never our own estimate. */
