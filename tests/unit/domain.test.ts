@@ -5,7 +5,9 @@ import { applyEvent, checkGap, initialAuctionState, GAP_TIMEOUT_MS } from '../..
 import { ServerClock, formatCountdown } from '../../src/domain/clock.js';
 import { advise, NO_PROBABILITY } from '../../src/domain/advisor.js';
 import { euros, formatEur, parseEurInput } from '../../src/domain/money.js';
-import { DEMO_LOT, DEMO_RULES } from '../../src/adapters/demo-server.js';
+import { DEMO_LOT, DEMO_RULES, DemoAuctionServer } from '../../src/adapters/demo-server.js';
+import { CONCEPT_LOT, SIMILAR_LOTS } from '../../src/adapters/demo-lots.js';
+import { similarLots } from '../../src/domain/similar.js';
 import type { AuctionEvent, BidRecord, SnapshotEvent } from '../../src/domain/types.js';
 
 const bid = (id: string, who: string, eur: number, t = 1000): BidRecord => ({ bidId: id, bidderId: who, amount: euros(eur), serverTime: t });
@@ -117,30 +119,71 @@ test('chosen bid amounts are rounded up to valid bids on the step grid', () => {
   assert.equal(currentStep(DEMO_LOT, DEMO_RULES, [bid('a', 'x', 50_000)]), euros(1_000));
 });
 
-test('advisor without a personal limit: declared retail value is the only reference', () => {
+test('advisor without a budget: estimated retail value from the listing is the stop point', () => {
   const retail = DEMO_LOT.retailValue!;
   const a = advise({ auction: stateWith([bid('a', 'other', 48_000, 100_000)]), cap: null, myBidderId: 'me', serverNow: 100_000, connection: 'online' });
   assert.equal(a.action, 'can_bid');
-  assert.equal(a.reference, 'retail');
-  assert.equal(a.nextValid, euros(48_500));
-  assert.match(a.headline, new RegExp(`${Math.round((euros(48_500) / retail) * 100)} % от обявената retail стойност`));
-  assert.ok(a.reasons.some((r) => r.includes('не наша оценка')), 'states that retail is lot data, not an estimate');
+  assert.equal(a.retail, retail);
+  assert.equal(a.walkAway, retail);
+  assert.equal(a.headline, `Можеш да наддаваш до ${formatEur(retail)}.`);
+  assert.ok(a.tips.some((t) => t.includes('Задай бюджет')), 'asks for a budget');
+  assert.ok(a.reasons[0]!.startsWith('Estimated retail value') && a.reasons[0]!.includes('не е наша оценка'), 'Защо starts with the estimated retail value');
   assert.equal(a.probabilityText, NO_PROBABILITY);
   const over = advise({ auction: stateWith([bid('a', 'other', retail / 100, 100_000)]), cap: null, myBidderId: 'me', serverNow: 100_000, connection: 'online' });
+  assert.equal(over.action, 'fold');
   assert.equal(over.risk, 'над retail');
-  assert.match(over.headline, /^Внимание/);
+  assert.equal(over.suggestSimilar, true);
+  assert.match(over.headline, /Препоръчваме да спреш/);
   const none = advise({ auction: { ...stateWith([bid('a', 'other', 1_000, 100_000)]), lot: { ...DEMO_LOT, retailValue: null } }, cap: null, myBidderId: 'me', serverNow: 100_000, connection: 'online' });
-  assert.equal(none.reference, null);
+  assert.equal(none.walkAway, null);
   assert.equal(none.headline, `Следващата валидна оферта е ${formatEur(euros(1_100))}.`);
 });
 
-test('advisor: over limit, leading, offline, ended, no limit', () => {
+test('advisor with a budget: stop point = lower of budget and estimated retail value; keep the money for another car', () => {
+  const retail = DEMO_LOT.retailValue!;
+  const low = advise({ auction: stateWith([bid('a', 'other', 42_500, 100_000)]), cap: euros(50_000), myBidderId: 'me', serverNow: 100_000, connection: 'online' });
+  assert.equal(low.walkAway, euros(50_000));
+  assert.equal(low.headline, `Можеш да наддаваш до ${formatEur(euros(50_000))}.`);
+  assert.ok(low.tips.some((t) => t.includes('под estimated retail value') && t.includes('вдигнеш бюджета')), 'budget below ERV: stop at budget, can raise');
+  const high = advise({ auction: stateWith([bid('a', 'other', 42_500, 100_000)]), cap: retail + euros(20_000), myBidderId: 'me', serverNow: 100_000, connection: 'online' });
+  assert.equal(high.walkAway, retail, 'never advise above the estimated retail value');
+  const over = advise({ auction: stateWith([bid('a', 'other', 50_000, 100_000)]), cap: euros(50_000), myBidderId: 'me', serverNow: 100_000, connection: 'online' });
+  assert.equal(over.action, 'stop_over_budget');
+  assert.equal(over.suggestSimilar, true);
+  assert.ok(over.tips.some((t) => t.includes(`запазваш ${formatEur(euros(50_000))} за друга кола`)), 'keep the money for another car');
+  assert.ok(over.tips.some((t) => t.includes('увеличиш бюджета')), 'can always raise the budget');
+});
+
+test('advisor: over budget, leading, offline, ended, no budget', () => {
   const s = stateWith([bid('a', 'other', 48_000, 100_000)]);
-  assert.equal(advise({ auction: s, cap: euros(48_000), myBidderId: 'me', serverNow: 100_000, connection: 'online' }).action, 'stop_over_limit');
+  assert.equal(advise({ auction: s, cap: euros(48_000), myBidderId: 'me', serverNow: 100_000, connection: 'online' }).action, 'stop_over_budget');
   assert.equal(advise({ auction: stateWith([bid('a', 'me', 42_500, 100_000)]), cap: euros(48_000), myBidderId: 'me', serverNow: 100_000, connection: 'online' }).action, 'wait_leading');
   assert.equal(advise({ auction: s, cap: euros(60_000), myBidderId: 'me', serverNow: 100_000, connection: 'offline' }).action, 'offline');
   assert.equal(advise({ auction: stateWith([], 'ended'), cap: euros(60_000), myBidderId: 'me', serverNow: 100_000, connection: 'online' }).action, 'ended');
-  assert.equal(advise({ auction: s, cap: null, myBidderId: 'me', serverNow: 100_000, connection: 'online' }).action, 'can_bid', 'no personal limit: bidding is allowed');
+  assert.equal(advise({ auction: s, cap: null, myBidderId: 'me', serverNow: 100_000, connection: 'online' }).action, 'can_bid', 'no budget: bidding is allowed');
+});
+
+test('similar cars: other lots, the ones within budget first, closest estimated retail value next', () => {
+  const list = similarLots(CONCEPT_LOT, [CONCEPT_LOT, ...SIMILAR_LOTS], euros(70_000));
+  assert.equal(list.length, 5);
+  assert.ok(list.every((x) => x.lot.lotId !== CONCEPT_LOT.lotId), 'never the current car');
+  const firstOver = list.findIndex((x) => x.withinBudget === false);
+  assert.ok(list.slice(0, firstOver).every((x) => x.withinBudget === true) && list.slice(firstOver).every((x) => x.withinBudget === false), 'within budget first');
+  assert.equal(list[0]!.lot.title, 'Audi RS 5 Coupé', 'closest estimated retail value within budget');
+  assert.ok(similarLots(CONCEPT_LOT, SIMILAR_LOTS, null).every((x) => x.withinBudget === null), 'no budget: no fit badge');
+  for (const l of SIMILAR_LOTS) assert.ok(l.demo && l.retailValue && l.details?.some((d) => d.label === 'VIN'), `${l.lotId} is a labelled demo lot`);
+});
+
+test('demo server can switch to another lot: a new auction from 0 €', () => {
+  const srv = new DemoAuctionServer({ competitors: false });
+  const events: AuctionEvent[] = [];
+  srv.subscribe((e) => events.push(e));
+  srv.switchLot(SIMILAR_LOTS[1]!);
+  srv.stop();
+  const last = events.at(-1)!;
+  assert.equal(last.type, 'lot_change');
+  assert.equal(last.type === 'lot_change' && last.lot.lotId, SIMILAR_LOTS[1]!.lotId);
+  assert.equal(last.type === 'lot_change' && last.bids.length, 0);
 });
 
 test('money formatting and parsing (bg-BG)', () => {

@@ -87,3 +87,24 @@ declare const __PORSCHE_GLB__: boolean | undefined;
 /** True when the build found public/models/porsche-911-gt3.glb. */
 export const HAS_PORSCHE_GLB = typeof __PORSCHE_GLB__ !== 'undefined' && __PORSCHE_GLB__ === true;
 export const DEMO_LOT: LotInfo = HAS_PORSCHE_GLB ? PORSCHE_LOT : CONCEPT_LOT;
+
+// Similar DEMO lots (sports coupés) for "keep the money for another car". Sample data only:
+// not real listings; the estimated retail value is the value stated on each sample lot.
+const coupe = (lotId: string, title: string, year: string, engine: string, hp: string, km: string, color: string, vin: string, retailEur: number): LotInfo => ({
+  lotId, title, subtitle: 'ДЕМО лот — примерни данни, не е реална обява',
+  specs: [{ label: 'Година', value: year }, { label: 'Двигател', value: engine }, { label: 'Мощност', value: hp }, { label: 'Пробег', value: km }],
+  details: [
+    { label: 'Модел', value: title }, { label: 'Година', value: year }, { label: 'Каросерия', value: 'Купе' },
+    { label: 'Двигател', value: engine }, { label: 'Мощност', value: hp }, { label: 'Пробег', value: km },
+    { label: 'Цвят', value: color }, { label: 'Състояние', value: 'Без щети' }, { label: 'VIN', value: vin }, { label: 'Местоположение', value: 'София, BG' },
+  ],
+  retailValue: euros(retailEur), retailSource: SAMPLE, currency: 'EUR', startPrice: 0, demo: true,
+});
+
+export const SIMILAR_LOTS: LotInfo[] = [
+  coupe('DEMO-0102', 'BMW M4 Competition (G82)', '2022', '3.0 L', '510 к.с.', '28 600 км', 'Сив металик', 'WBS43AZ00NCDEM002', 82_000),
+  coupe('DEMO-0103', 'Audi RS 5 Coupé', '2021', '2.9 L', '450 к.с.', '41 200 км', 'Черен', 'WUAZZZF5XMADEM003', 64_000),
+  coupe('DEMO-0104', 'Mercedes-AMG C 63 S Coupé', '2020', '4.0 L', '510 к.с.', '52 800 км', 'Бял', 'WDD2053871FDEM004', 58_500),
+  coupe('DEMO-0105', 'Lexus RC F', '2021', '5.0 L', '464 к.с.', '33 000 км', 'Червен', 'JTHHP5BC5MADEM005', 61_000),
+  coupe('DEMO-0106', 'Porsche 718 Cayman GTS 4.0', '2022', '4.0 L', '400 к.с.', '15 400 км', 'Син', 'WP0ZZZ98ZNSDEM006', 99_000),
+];

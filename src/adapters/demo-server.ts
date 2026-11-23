@@ -2,7 +2,7 @@
 // It behaves like an authoritative server: its own clock (deliberately skewed from the device
 // clock to exercise drift correction), its own validation, idempotency, rate limiting and
 // anti-sniping, and simulated competing bidders with private limits.
-import type { AuctionEvent, AuctionStatus, BidRecord, BidRequest, BidResult, BidRules } from '../domain/types.js';
+import type { AuctionEvent, AuctionStatus, BidRecord, BidRequest, BidResult, BidRules, LotInfo } from '../domain/types.js';
 import { checkBid, currentStep, extendedEnd, highestBid, nextValidBid } from '../domain/rules.js';
 import { DEMO_LOT } from './demo-lots.js';
 import { euros } from '../domain/money.js';
@@ -66,7 +66,7 @@ export class DemoAuctionServer {
   private bidCounter = 0;
   readonly skew: number;
   private readonly localNow: () => number;
-  readonly lot = DEMO_LOT;
+  lot: LotInfo = DEMO_LOT;
   readonly rules = DEMO_RULES;
   private activity: number;
   private simulateCompetitors: boolean;
@@ -112,6 +112,13 @@ export class DemoAuctionServer {
     this.emit({ type: 'lot_change', seq: ++this.seq, serverTime: this.now(), lot: this.lot, rules: this.rules, status: this.status, endsAt: this.endsAt, bids: [...this.bids] });
     this.tickTimer = setInterval(() => this.tick(), 250);
     this.scheduleCompetitor(4000);
+  }
+
+  /** DEMO: start a new auction (from 0 €) for another lot — e.g. a similar car chosen in AiBidder. */
+  switchLot(lot: LotInfo): void {
+    this.lot = lot;
+    this.opts = { ...this.opts, openingBids: false }; // a new auction always starts empty
+    this.reset();
   }
 
   stop(): void {

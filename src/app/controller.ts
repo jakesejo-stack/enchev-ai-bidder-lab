@@ -35,7 +35,7 @@ export interface Settings { speakAdvice: boolean; highContrast: boolean; rate: n
 const STORE_KEY = 'enchev-ai-bidder-lab:v1';
 const THRESHOLDS = [60_000, 30_000, 10_000];
 
-/** No personal limit is shown in this lab: bids may go from 0 € up to the auction maximum (1 000 000 €). */
+/** The user's optional budget (set in AiBidder) is capped at the auction maximum (1 000 000 €). */
 export const CAP_MAX: Cents = 100_000_000;
 const validCap = (c: unknown): c is Cents => typeof c === 'number' && Number.isInteger(c) && c >= 0 && c <= CAP_MAX;
 
@@ -127,7 +127,7 @@ export class Controller {
     if (this.leading) return 'ВОДИШ';
     const next = this.nextValid!;
     if (rules.maxBid !== null && next > rules.maxBid) return 'НАД МАКСИМУМА';
-    if (this.cap !== null && next > this.cap) return 'НАД ЛИМИТА ТИ';
+    if (this.cap !== null && next > this.cap) return 'НАД БЮДЖЕТА';
     return null;
   }
 
@@ -274,7 +274,7 @@ export class Controller {
     if (c !== null && !validCap(c)) return;
     this.cap = c;
     this.save();
-    this.log.push({ at: this.serverNow, text: c === null ? 'Лимитът е изчистен' : `Лимитът е зададен на ${formatEur(c)}`, kind: 'system' });
+    this.log.push({ at: this.serverNow, text: c === null ? 'Бюджетът е изчистен' : `Бюджетът е зададен на ${formatEur(c)}`, kind: 'system' });
     this.refreshAdvice();
     this.notify();
   }
@@ -328,7 +328,7 @@ export class Controller {
       bidderId: this.adapter.bidderId, authenticated: this.adapter.authenticated, lotId: lot.lotId,
     });
     if (!pre.ok) { this.confirm = { ...c, error: pre.message ?? 'Офертата не е валидна.' }; this.notify(); return; }
-    if (this.cap !== null && c.amount > this.cap) { this.confirm = { ...c, error: 'Сумата е над лимита ти. Промени лимита съзнателно, ако искаш да продължиш.' }; this.notify(); return; }
+    if (this.cap !== null && c.amount > this.cap) { this.confirm = { ...c, error: 'Сумата е над бюджета ти. Увеличи бюджета в AiBidder, ако искаш да продължиш.' }; this.notify(); return; }
     if (this.effectiveConnection !== 'online') { this.confirm = { ...c, error: 'Няма връзка. Офертата не е изпратена.' }; this.notify(); return; }
 
     let attempt = this.attempts.find((a) => a.key === c.key);
@@ -369,7 +369,7 @@ export class Controller {
         break;
       case 'pause_voice': this.david.pause(); break;
       case 'resume_voice': this.david.resume(); break;
-      case 'limit': this.david.say('В тази версия няма личен лимит: можеш да наддаваш от 0 до 1 000 000 евро.', 'event'); break;
+      case 'limit': this.david.say(this.cap === null ? 'Не си задал бюджет. Задай го в AiBidder.' : `Бюджетът ти е ${speakEur(this.cap)}.`, 'event'); break;
       default: this.david.say('Не разбрах командата. Опитай: „цена“, „наддай“, „пауза“.', 'event');
     }
   }
@@ -379,13 +379,14 @@ export class Controller {
     try {
       const raw = localStorage.getItem(STORE_KEY);
       if (!raw) return;
-      const v = JSON.parse(raw) as { cap?: number | null; settings?: Partial<Settings> };
-      // The personal limit is no longer shown, so a limit saved by an older version is ignored.
+      const v = JSON.parse(raw) as { budget?: number | null; settings?: Partial<Settings> };
+      // The user's budget (an older "cap" field from a previous version is deliberately ignored).
+      if (validCap(v.budget)) this.cap = v.budget;
       if (v.settings) this.settings = { ...this.settings, ...v.settings };
     } catch { /* storage unavailable */ }
   }
 
   private save(): void {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify({ cap: this.cap, settings: this.settings })); } catch { /* ignore */ }
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ budget: this.cap, settings: this.settings })); } catch { /* ignore */ }
   }
 }

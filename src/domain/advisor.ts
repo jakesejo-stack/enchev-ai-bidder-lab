@@ -1,14 +1,15 @@
-// AiBidder's guidance: transparent signals computed ONLY from the observed event stream, the user's
-// own limit if one is set, and otherwise the retail value DECLARED in the lot (listing data, never our
-// estimate). No market predictions, no hidden bidders, no success percentages — there is no validated
-// model behind such numbers, so the UI states "Няма достатъчно данни" instead.
+// AiBidder's guidance: transparent rules over the observed event stream, the user's own budget (if set)
+// and the lot's ESTIMATED RETAIL VALUE as stated in the listing (lot data, not a value we compute).
+// The advice is a stop point, not a prediction: "bid up to X; above X we recommend you fold and keep the
+// money for a similar car". No success percentages and no hidden bidders — there is no validated model
+// behind such numbers, so the UI states "Няма достатъчно данни" instead.
 import type { BidRecord, Cents, ConnectionState } from './types.js';
 import type { AuctionState } from './reducer.js';
 import { highestBid, nextValidBid, stepFor } from './rules.js';
 import { formatEur } from './money.js';
 
-export type RiskLevel = 'нисък' | 'умерен' | 'висок' | 'над лимита' | 'над retail' | 'няма данни';
-export type AdviceAction = 'wait_leading' | 'can_bid' | 'stop_over_limit' | 'offline' | 'ended' | 'not_ready' | 'set_limit';
+export type RiskLevel = 'нисък' | 'умерен' | 'висок' | 'над бюджета' | 'над retail' | 'няма данни';
+export type AdviceAction = 'wait_leading' | 'can_bid' | 'stop_over_budget' | 'fold' | 'offline' | 'ended' | 'not_ready';
 export type Tone = 'ok' | 'warn' | 'bad' | 'info';
 
 export interface Signal { id: string; label: string; value: string; tone: Tone; }
@@ -17,13 +18,18 @@ export interface Advice {
   action: AdviceAction;
   risk: RiskLevel;
   headline: string;
+  /** Short, actionable lines for the "Съвет" page (budget, stop point, keep the money for another car). */
+  tips: string[];
+  /** Detailed explanation for the "Защо" page. */
   reasons: string[];
   signals: Signal[];
   nextValid: Cents | null;
-  /** Next valid bid as a fraction of the reference (the user's limit, else the declared retail value). */
-  limitUse: number | null;
-  /** What limitUse is measured against. */
-  reference: 'limit' | 'retail' | null;
+  /** Estimated retail value from the lot listing. */
+  retail: Cents | null;
+  /** Recommended stop point: the lower of the user's budget and the estimated retail value. */
+  walkAway: Cents | null;
+  /** Show similar cars (the user should keep the money for another lot). */
+  suggestSimilar: boolean;
   probabilityText: string;
   probabilityWhy: string;
 }
@@ -33,6 +39,7 @@ const NO_PROBABILITY_WHY = 'Няма валидиран модел, който �
 
 export interface AdviceInput {
   auction: AuctionState;
+  /** The user's own budget for this car (null = not set). */
   cap: Cents | null;
   myBidderId: string;
   serverNow: number;
@@ -43,11 +50,18 @@ export function bidsInWindow(bids: readonly BidRecord[], serverNow: number, wind
   return bids.filter((b) => serverNow - b.serverTime <= windowMs && b.serverTime <= serverNow + 5000);
 }
 
+/** Lower of budget and estimated retail value (null when neither is known). */
+export function stopPoint(cap: Cents | null, retail: Cents | null): Cents | null {
+  if (cap === null) return retail;
+  if (retail === null) return cap;
+  return Math.min(cap, retail);
+}
+
 export function advise({ auction, cap, myBidderId, serverNow, connection }: AdviceInput): Advice {
   const base = { probabilityText: NO_PROBABILITY, probabilityWhy: NO_PROBABILITY_WHY };
   const { lot, rules } = auction;
   if (!lot || !rules) {
-    return { ...base, action: 'not_ready', risk: 'няма данни', headline: 'Изчакваме данни за търга…', reasons: [], signals: [], nextValid: null, limitUse: null, reference: null };
+    return { ...base, action: 'not_ready', risk: 'няма данни', headline: 'Изчакваме данни за търга…', tips: [], reasons: [], signals: [], nextValid: null, retail: null, walkAway: null, suggestSimilar: false };
   }
   const next = nextValidBid(lot, rules, auction.bids);
   const top = highestBid(auction.bids);
@@ -56,88 +70,63 @@ export function advise({ auction, cap, myBidderId, serverNow, connection }: Advi
   const lastMinute = bidsInWindow(auction.bids, serverNow, 60_000);
   const recentBidders = new Set(bidsInWindow(auction.bids, serverNow, 5 * 60_000).map((b) => b.bidderId));
   recentBidders.delete(myBidderId);
-  const headroom = cap === null ? null : cap - next;
   const retail = lot.retailValue ?? null;
-  const reference: Advice['reference'] = cap !== null ? 'limit' : retail ? 'retail' : null;
-  const limitUse = cap !== null ? (cap <= 0 ? null : next / cap) : retail ? next / retail : null;
+  const walkAway = stopPoint(cap, retail);
   const step = top ? stepFor(top.amount, rules) : stepFor(lot.startPrice, rules);
-  const pct = (x: number) => `${Math.round(x * 100)} %`;
+  const fastFinish = lastMinute.length >= 4 && remaining < 60_000;
 
   const signals: Signal[] = [
     { id: 'position', label: 'Твоята позиция', value: leading ? 'Водиш' : top ? 'Не водиш' : 'Няма оферти', tone: leading ? 'ok' : 'info' },
-    cap !== null ? {
-      id: 'limit', label: 'Спрямо лимита',
-      value: headroom! >= 0 ? `Остават ${formatEur(headroom!)}` : `Над лимита с ${formatEur(-headroom!)}`,
-      tone: headroom! < 0 ? 'bad' : headroom! < step * 3 ? 'warn' : 'ok',
-    } : {
-      id: 'retail', label: 'Спрямо обявената retail стойност',
-      value: retail ? pct(next / retail) : 'не е обявена',
-      tone: !retail ? 'info' : next > retail ? 'bad' : next > retail * 0.9 ? 'warn' : 'ok',
-    },
+    { id: 'stop', label: 'Препоръчан праг', value: walkAway === null ? 'няма данни' : formatEur(walkAway), tone: walkAway !== null && next > walkAway ? 'bad' : 'info' },
+    { id: 'budget', label: 'Бюджет', value: cap === null ? 'не е зададен' : next > cap ? `надвишен с ${formatEur(next - cap)}` : `остават ${formatEur(cap - next)}`, tone: cap === null ? 'info' : next > cap ? 'bad' : cap - next < step * 3 ? 'warn' : 'ok' },
     { id: 'pace', label: 'Темп (последна минута)', value: `${lastMinute.length} ${lastMinute.length === 1 ? 'оферта' : 'оферти'}`, tone: lastMinute.length >= 4 ? 'warn' : 'info' },
     { id: 'bidders', label: 'Други участници (5 мин)', value: String(recentBidders.size), tone: 'info' },
   ];
 
+  const tips: string[] = [];
   const reasons: string[] = [];
-  const out = (action: AdviceAction, risk: RiskLevel, headline: string): Advice =>
-    ({ ...base, action, risk, headline, reasons, signals, nextValid: next, limitUse, reference });
+  const out = (action: AdviceAction, risk: RiskLevel, headline: string, suggestSimilar = false): Advice =>
+    ({ ...base, action, risk, headline, tips, reasons, signals, nextValid: next, retail, walkAway, suggestSimilar });
+
+  if (retail !== null) reasons.push(`Estimated retail value на колата: ${formatEur(retail)} (по данни от обявата, не е наша оценка).`);
+  reasons.push(top
+    ? `Следващата валидна оферта е ${formatEur(next)} (текуща ${formatEur(top.amount)} + стъпка ${formatEur(step)}).`
+    : `Още няма оферти. Първата валидна оферта е ${formatEur(next)}.`);
 
   if (auction.status === 'ended' || remaining === 0) {
-    reasons.push(top ? `Последната оферта е ${formatEur(top.amount)}.` : 'Няма подадени оферти.');
-    return out('ended', 'няма данни', leading ? 'Търгът приключи — твоята оферта е най-високата.' : 'Търгът приключи.');
+    return out('ended', 'няма данни', leading ? 'Търгът приключи — твоята оферта е най-високата.' : 'Търгът приключи.', !leading);
   }
   if (connection !== 'online') {
     reasons.push('Без връзка не виждаме актуалната цена, затова наддаването е спряно.');
     return out('offline', 'няма данни', 'Няма връзка — изчакай повторно свързване.');
   }
-  const fastFinish = lastMinute.length >= 4 && remaining < 60_000;
-  if (cap === null) {
-    // No personal limit: bids may go up to the auction maximum. The declared retail value of the lot
-    // (listing data) is the only reference; it is not a prediction of what the car will sell for.
-    let risk: RiskLevel = 'нисък';
-    if (retail) {
-      const use = next / retail;
-      risk = use > 1 ? 'над retail' : use > 0.9 || fastFinish ? 'висок' : use > 0.7 || lastMinute.length >= 2 ? 'умерен' : 'нисък';
-    } else if (fastFinish) risk = 'висок';
-    else if (lastMinute.length >= 2) risk = 'умерен';
-    if (leading) {
-      reasons.push(`Най-високата оферта е твоята: ${formatEur(top!.amount)}.`);
-      reasons.push('Повторно наддаване срещу себе си не е позволено и само би вдигнало цената.');
-      return out('wait_leading', risk === 'над retail' ? 'висок' : risk, 'Водиш. Не е нужно да наддаваш сега.');
-    }
-    reasons.push(top
-      ? `Следващата валидна оферта е ${formatEur(next)} (текуща ${formatEur(top.amount)} + стъпка ${formatEur(step)}).`
-      : `Още няма оферти. Търгът започва от ${formatEur(lot.startPrice)}, първата валидна оферта е ${formatEur(next)}.`);
-    if (retail) reasons.push(`Това е ${pct(next / retail)} от обявената в лота retail стойност ${formatEur(retail)} (данни на лота, не наша оценка).`);
-    if (lastMinute.length >= 2) reasons.push(`Има ${lastMinute.length} оферти през последната минута — цената се движи бързо.`);
-    if (remaining < 30_000) reasons.push('Оферта в последните секунди може да удължи търга.');
-    const headline = !retail ? `Следващата валидна оферта е ${formatEur(next)}.`
-      : next > retail ? `Внимание: ${formatEur(next)} е над обявената retail стойност (${formatEur(retail)}).`
-      : `Следващата валидна оферта е ${formatEur(next)} — ${pct(next / retail)} от обявената retail стойност.`;
-    return out('can_bid', risk, headline);
-  }
-
-  // Risk: purely a function of headroom against the user's own limit, observed pace and time.
-  let risk: RiskLevel;
-  if (headroom! < 0) risk = 'над лимита';
-  else if (headroom! < step * 2 || fastFinish) risk = 'висок';
-  else if (limitUse! > 0.85 || lastMinute.length >= 2) risk = 'умерен';
-  else risk = 'нисък';
-
-  if (leading) {
-    reasons.push(`Най-високата оферта е твоята: ${formatEur(top!.amount)}.`);
-    reasons.push('Повторно наддаване срещу себе си не е позволено и само би вдигнало цената.');
-    if (risk === 'над лимита') risk = 'висок';
-    return out('wait_leading', risk, 'Водиш. Не е нужно да наддаваш сега.');
-  }
-  if (headroom! < 0) {
-    reasons.push(`Следващата валидна оферта ${formatEur(next)} надвишава лимита ти ${formatEur(cap)}.`);
-    reasons.push('Ако искаш да продължиш, първо промени лимита съзнателно.');
-    return out('stop_over_limit', 'над лимита', 'Спри — следващата оферта е над лимита ти.');
-  }
-  reasons.push(`Следващата валидна оферта е ${formatEur(next)} (текуща ${top ? formatEur(top.amount) : 'няма'} + стъпка ${formatEur(step)}).`);
-  reasons.push(`След нея до лимита ти остават ${formatEur(headroom!)}.`);
+  if (cap !== null) reasons.push(`Твоят бюджет: ${formatEur(cap)}. Можеш да го промениш по всяко време.`);
+  if (walkAway !== null) reasons.push(`Препоръчваме да спреш над ${formatEur(walkAway)} — ${cap !== null && (retail === null || cap <= retail) ? 'това е бюджетът ти' : 'над тази сума плащаш повече от estimated retail value'}.`);
   if (lastMinute.length >= 2) reasons.push(`Има ${lastMinute.length} оферти през последната минута — цената се движи бързо.`);
   if (remaining < 30_000) reasons.push('Оферта в последните секунди може да удължи търга.');
-  return out('can_bid', risk, `Оферта от ${formatEur(next)} е в рамките на лимита ти.`);
+
+  if (leading) {
+    tips.push(`Най-високата оферта е твоята: ${formatEur(top!.amount)}.`);
+    if (walkAway !== null) tips.push(`Ако те надминат, наддавай най-много до ${formatEur(walkAway)}.`);
+    return out('wait_leading', 'нисък', 'Водиш. Не е нужно да наддаваш сега.');
+  }
+  if (cap !== null && next > cap) {
+    tips.push(`Ако спреш сега, запазваш ${formatEur(cap)} за друга кола — виж подобните коли.`);
+    tips.push('Ако искаш тази кола, можеш винаги да увеличиш бюджета.');
+    return out('stop_over_budget', 'над бюджета', `Следващата оферта (${formatEur(next)}) е над бюджета ти.`, true);
+  }
+  if (retail !== null && next > retail) {
+    tips.push(`Над ${formatEur(retail)} плащаш повече, отколкото струва колата по обявата.`);
+    tips.push(cap !== null ? `Запази бюджета си от ${formatEur(cap)} за подобна кола.` : 'Пробвай подобна кола — може да вземеш по-добра цена.');
+    return out('fold', 'над retail', `Цената мина estimated retail value (${formatEur(retail)}). Препоръчваме да спреш.`, true);
+  }
+
+  // Can bid: how close the next bid is to the stop point, plus observed pace.
+  const use = walkAway ? next / walkAway : 0;
+  const risk: RiskLevel = walkAway && (use > 0.9 || fastFinish) ? 'висок' : (walkAway && use > 0.7) || lastMinute.length >= 2 ? 'умерен' : 'нисък';
+  if (walkAway !== null) tips.push(`До прага остават ${formatEur(walkAway - next)}.`);
+  if (cap === null) tips.push('Задай бюджет, за да ти казвам точно кога да спреш.');
+  else if (retail !== null && cap < retail) tips.push(`Бюджетът ти е под estimated retail value (${formatEur(retail)}). Ако цената стигне ${formatEur(cap)}, спри — ще ти предложим подобна кола. Можеш винаги да вдигнеш бюджета.`);
+  if (retail !== null && (cap === null || cap >= retail)) tips.push(`Над ${formatEur(retail)} (estimated retail value) препоръчваме да спреш.`);
+  return out('can_bid', risk, walkAway !== null ? `Можеш да наддаваш до ${formatEur(walkAway)}.` : `Следващата валидна оферта е ${formatEur(next)}.`);
 }

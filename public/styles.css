@@ -242,7 +242,7 @@ details.card > summary::-webkit-details-marker { display: none; }
 .aib-dot { position: absolute; top: 3px; left: 32px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #12070a; background: #7d8592; }
 .aib[data-level="нисък"] .aib-dot { background: var(--ok); }
 .aib[data-level="умерен"] .aib-dot { background: var(--amber); }
-.aib[data-level="висок"] .aib-dot, .aib[data-level="над лимита"] .aib-dot, .aib[data-level="над retail"] .aib-dot { background: var(--red); }
+.aib[data-level="висок"] .aib-dot, .aib[data-level="над бюджета"] .aib-dot, .aib[data-level="над retail"] .aib-dot { background: var(--red); }
 .aib[data-new] { animation: aib-nudge 1.4s ease-in-out 3; }
 @keyframes aib-nudge { 50% { box-shadow: 0 10px 30px rgba(0,0,0,.55), 0 0 0 6px rgba(229,55,69,.3), 0 0 32px rgba(229,55,69,.6); } }
 .aib-panel { position: fixed; z-index: 46; display: flex; flex-direction: column; max-height: var(--aib-max, 400px); border-radius: 18px; border: 1px solid rgba(229,55,69,.5); background: rgba(14,15,20,.97); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 24px 60px rgba(0,0,0,.6), 0 0 30px rgba(229,55,69,.16); overflow: hidden; }
@@ -517,8 +517,6 @@ html.hc .demo-strip { background: #000; color: #ffe08a; }
 .aib .aib-ic .ic { width: 19px; height: 19px; }
 .aib-name { font-size: .56rem; letter-spacing: .02em; line-height: 1; white-space: nowrap; }
 .aib-dot { top: 5px; left: auto; right: 7px; }
-.aib::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 1px solid rgba(229,55,69,.35); pointer-events: none; }
-.aii::after { border-color: rgba(220,226,236,.28); }
 .aib-panel { border-radius: 30px; }
 .aib-panel.pop { animation: bubble-open .36s cubic-bezier(.2,.9,.25,1.12) both; }
 @keyframes bubble-open {
@@ -532,3 +530,37 @@ html.hc .demo-strip { background: #000; color: #ffe08a; }
 .aib-kv > div { border-radius: 20px; padding: 9px 14px; }
 .aii-retail { border-radius: 22px; padding: 10px 16px; }
 .aib-page .risk, .prob-pill { border-radius: 999px; }
+
+/* AiBidder: advice lines, estimated retail value, budget, similar cars */
+.aib-tabs [role="tab"] { font-size: .78rem; padding: 0 4px; }
+.aib-tips { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.aib-tips li { position: relative; padding: 8px 12px 8px 30px; border-radius: 18px; background: rgba(255,255,255,.04); border: 1px solid var(--line); font-size: .84rem; line-height: 1.4; }
+.aib-tips li::before { content: ""; position: absolute; left: 12px; top: 14px; width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 8px var(--red); }
+.aib-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.aib-acts .btn { border-radius: 999px; }
+.aib-erv { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 2px 10px; padding: 10px 16px; border-radius: 22px; border: 1px solid rgba(242,193,78,.5); background: rgba(242,193,78,.08); margin-bottom: 8px; }
+.aib-erv span { font-size: .74rem; color: #f7dc95; letter-spacing: .03em; }
+.aib-erv b { font-size: 1.2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.aib-erv small { grid-column: 1 / -1; font-size: .66rem; color: var(--muted); }
+.aib-budget { display: flex; flex-direction: column; gap: 10px; }
+.aib-budget label { font-weight: 700; font-size: .9rem; }
+.aib-budget-row { display: flex; align-items: center; gap: 8px; }
+.aib-budget-row input { flex: 1; min-width: 0; min-height: 48px; border-radius: 999px; border: 1px solid var(--line2); background: #0c0e13; color: var(--text); padding: 0 18px; font-size: 1.15rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.aib-budget-row span { font-weight: 800; color: var(--muted); }
+.aib-budget-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.aib-budget-quick .btn, .aib-budget-save { border-radius: 999px; }
+.aib-budget-save { background: linear-gradient(180deg, #ff3b4a, #b80f1c); border-color: rgba(255,255,255,.2); }
+.aib-budget-now { margin: 0; font-size: .82rem; font-weight: 700; }
+.aib-similar { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sim { padding: 10px 14px; border-radius: 22px; border: 1px solid var(--line2); background: rgba(255,255,255,.03); display: flex; flex-direction: column; gap: 4px; }
+.sim-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.sim-top b { font-size: .92rem; }
+.sim-fit { flex: none; font-size: .64rem; font-weight: 800; letter-spacing: .05em; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line2); }
+.sim-fit[data-fit="true"] { color: #04140a; background: var(--ok); border-color: var(--ok); }
+.sim-fit[data-fit="false"] { color: #f7dc95; border-color: rgba(242,193,78,.6); }
+.sim-sub { font-size: .74rem; color: var(--muted); }
+.sim-erv { font-size: .8rem; }
+.sim-go { align-self: flex-start; border-radius: 999px; margin-top: 4px; }
+.viewer-none { display: none; }
+.viewer[data-model="none"] canvas, .viewer[data-model="none"] .viewer-poster, .viewer[data-model="none"] .viewer-tag, .viewer[data-model="none"] .viewer-hint { display: none !important; }
+.viewer[data-model="none"] .viewer-none { display: grid; place-items: center; position: absolute; inset: 0; z-index: 2; font-size: .82rem; color: var(--muted); text-align: center; padding: 16px; }

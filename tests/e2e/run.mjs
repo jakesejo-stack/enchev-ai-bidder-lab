@@ -211,7 +211,7 @@ await run('confirmation: choose a higher amount (+10 000 €) → consent again 
   expect(s.top === 5_250_000, `accepted at 52 500 € (top ${s.top})`);
 });
 
-await run('no personal limit on screen; the 1 000 000 € maximum is enforced only by the server', { query: '?seed=3&competitors=0' }, async (p) => {
+await run('budget is optional (no "лимит"); the 1 000 000 € maximum is not shown and is enforced only by the server', { query: '?seed=3&competitors=0' }, async (p) => {
   let visible = await p.evaluate(() => document.body.innerText);
   await p.click('[data-ref="aib"]');
   await p.waitForSelector('#aib-panel:not([hidden])');
@@ -382,7 +382,7 @@ for (const [w, h] of [[390, 844], [360, 740]]) {
   });
 }
 
-await run('AiBidder bubble (phone): compact non-modal panel, 2 pages, never covers НАДДАЙ', { ctx: PHONE(390, 844), query: '?seed=3&competitors=0' }, async (p) => {
+await run('AiBidder bubble (phone): compact non-modal panel, 4 pages, never covers НАДДАЙ', { ctx: PHONE(390, 844), query: '?seed=3&competitors=0' }, async (p) => {
   expect((await text(p, 'aib')).includes('AiBidder'), 'bubble says AiBidder');
   expect(!(await p.locator('[data-ref="aibPanel"]').isVisible()), 'panel starts closed');
   await p.tap('[data-ref="aib"]');
@@ -398,9 +398,10 @@ await run('AiBidder bubble (phone): compact non-modal panel, 2 pages, never cove
   await p.tap('#aib-t1');
   await p.waitForFunction(() => document.querySelector('#aib-t1').getAttribute('aria-selected') === 'true' && document.querySelector('#aib-p0').inert);
   await p.screenshot({ path: join(shots, 'mobile-390-aibidder.png') });
-  expect((await p.locator('#aib-panel [role="tab"]').count()) === 2, 'two pages: Съвет · Защо');
+  expect((await p.locator('#aib-panel [role="tab"]').count()) === 4, 'four pages: Съвет · Защо · Бюджет · Подобни');
+  expect((await text(p, 'aibErv')).replace(/\s/g, '').endsWith('€'), 'estimated retail value shown on Защо');
   await p.tap('#aib-t0');
-  expect((await text(p, 'aibRetail')).replace(/\s/g, '').endsWith('€'), 'declared retail value shown');
+  expect((await p.locator('#aib-p0 .aib-kv, [data-ref="aibNext"], [data-ref="aibRetail"]').count()) === 0, 'no next-bid / retail tiles on Съвет');
   // Non-modal: a tap on НАДДАЙ goes through (and closes the panel).
   await p.tap('.bidbar .cta');
   await p.waitForSelector('dialog[open]');
@@ -425,12 +426,12 @@ for (const [label, ctx] of [['desktop', DESKTOP], ['phone', PHONE(390, 844)]]) {
     await p.waitForSelector('#aii-panel:not([hidden])');
     expect(!(await p.locator('#aib-panel').isVisible()), 'only one panel open at a time');
     const page1 = await p.locator('#aii-p0').innerText();
-    expect(page1.includes('VIN') && page1.includes('Скоростна кутия') && page1.includes('Retail стойност'), 'all characteristics + retail value');
+    expect(page1.includes('VIN') && page1.includes('Скоростна кутия') && page1.includes('Estimated retail value'), 'all characteristics + retail value');
     expect(page1.includes('примерни ДЕМО данни'), 'retail value is labelled as sample lot data');
     await p.click('#aii-t1');
     await p.waitForFunction(() => document.querySelector('#aii-t1').getAttribute('aria-selected') === 'true');
     const page2 = await p.locator('#aii-p1').innerText();
-    expect(page2.includes('Оферти общо') && /Оферти общо\s*6/.test(page2) && page2.includes('Цена / retail стойност'), 'live statistics');
+    expect(page2.includes('Оферти общо') && /Оферти общо\s*6/.test(page2) && page2.includes('Цена / estimated retail value'), 'live statistics');
     await p.click('#aii-t2');
     const page3 = await p.locator('#aii-p2').innerText();
     expect(page3.includes('Начална цена') && page3.replace(/\s/g, '').includes('0€') && page3.includes('изключено'), 'rules: start 0 €, real bids off');
@@ -649,6 +650,39 @@ await run('real bid endpoint refuses (501) and no request leaves the origin', { 
   expect(r === 501, `status ${r}`);
   const external = await p.evaluate(() => performance.getEntriesByType('resource').map((e) => e.name).filter((u) => !u.startsWith(location.origin)));
   expect(external.length === 0, 'external requests: ' + external.join(', '));
+});
+
+await run('AiBidder budget: stop point, keep the money for another car, similar cars, bid on one of them', { ctx: PHONE(390, 844), query: '?seed=3&competitors=0&opening=1' }, async (p) => {
+  await p.tap('[data-ref="aib"]');
+  await p.waitForSelector('[data-ref="aibPanel"]:not([hidden])');
+  expect((await text(p, 'advHead')).startsWith('Можеш да наддаваш до 96 000'), `no budget: stop at the estimated retail value — ${await text(p, 'advHead')}`);
+  await p.tap('[data-ref="aibBudgetBtn"]');
+  await p.waitForFunction(() => document.querySelector('#aib-t2').getAttribute('aria-selected') === 'true');
+  await p.fill('[data-ref="budgetInput"]', '60 000');
+  await p.tap('.aib-budget-save');
+  await p.waitForFunction(() => window.__bidder.ctrl.cap === 6_000_000);
+  await p.tap('#aib-t0');
+  expect((await text(p, 'advHead')).startsWith('Можеш да наддаваш до 60 000'), 'budget below ERV: stop at the budget');
+  expect((await text(p, 'aibTips')).includes('вдигнеш бюджета'), 'can always raise the budget');
+  await p.tap('#aib-t2');
+  await p.fill('[data-ref="budgetInput"]', '42 000');
+  await p.tap('.aib-budget-save');
+  await p.waitForFunction(() => window.__bidder.ctrl.advice.action === 'stop_over_budget');
+  await p.tap('#aib-t0');
+  expect((await text(p, 'aibTips')).includes('запазваш 42 000 € за друга кола'), 'keep the money for another car');
+  expect((await text(p, 'ctaLabel')) === 'НАД БЮДЖЕТА' || (await text(p, 'cta2Label')) === 'НАД БЮДЖЕТА', 'bid button says over budget');
+  await p.tap('[data-ref="aibSimilarBtn"]');
+  await p.waitForFunction(() => document.querySelectorAll('.aib-similar .sim').length === 5);
+  const fits = await p.locator('.sim-fit').allInnerTexts();
+  expect(fits.length === 5 && fits.every((f) => f === 'над бюджета'), `fit badges: ${fits}`);
+  await p.screenshot({ path: join(shots, 'mobile-390-aibidder-similar.png') });
+  await p.locator('.sim-go').first().tap();
+  await p.waitForFunction(() => window.__bidder.ctrl.auction.lot.lotId !== 'DEMO-0001' && window.__bidder.ctrl.auction.bids.length === 0);
+  const lot = await p.evaluate(() => window.__bidder.ctrl.auction.lot);
+  expect((await text(p, 'lotTitle')) === lot.title, 'new lot on screen');
+  expect((await p.getAttribute('[data-ref="viewer"]', 'data-model')) === 'none' && (await p.locator('.viewer-none').isVisible()), 'no fake 3D model for a lot without one');
+  expect(await p.evaluate(() => window.__bidder.ctrl.cap === 4_200_000), 'budget kept for the new car');
+  return lot.title;
 });
 
 await run('round bubbles: AiBidder and AI Info are circles; panels open like a bubble from the button', { ctx: PHONE(390, 844), query: '?seed=3&competitors=0' }, async (p) => {

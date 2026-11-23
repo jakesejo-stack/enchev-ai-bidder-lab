@@ -8,7 +8,7 @@ export function parseCommand(text: string): VoiceCommand {
   if (/пауза|спри гласа|тихо/.test(t)) return 'pause_voice';
   if (/продължи|пусни гласа/.test(t)) return 'resume_voice';
   if (/наддай|оферта|наддаване/.test(t)) return 'open_bid';
-  if (/лимит/.test(t)) return 'limit';
+  if (/лимит|бюджет/.test(t)) return 'limit';
   if (/цена|колко|текущ/.test(t)) return 'price';
   return 'unknown';
 }

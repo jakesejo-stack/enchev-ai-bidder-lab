@@ -76,6 +76,7 @@ export const APP_HTML = `
         <img class="viewer-poster" src="/media/demo-car-poster.webp" alt="E&amp;A концептуално купе — демонстрационен модел" width="1200" height="640" decoding="async">
         <span class="viewer-hint" aria-hidden="true">Плъзни, за да завъртиш</span>
         <span class="viewer-tag">ДЕМО КОНЦЕПТ · не е реален автомобил</span>
+        <span class="viewer-none">Няма снимки и 3D модел за този ДЕМО лот</span>
       </div>
       <div class="tiles blk-tiles">
         <div class="tile">
@@ -176,7 +177,7 @@ export const APP_HTML = `
       <h1 id="ai-h">AI наддаване — AiBidder и DAVID</h1>
       <div class="card prose">
         <h2>AiBidder — съвети</h2>
-        <p>AiBidder (балончето в ъгъла) използва <b>само</b> данните, които се виждат в търга: подадените оферти, стъпката, оставащото време и <b>обявената в лота retail стойност</b> (данни на лота, не наша оценка). Не оценява пазарна стойност, не измисля участници и не показва „вероятност за успех“ — за това няма валидиран модел.</p>
+        <p>AiBidder (балончето в ъгъла) използва <b>само</b> данните, които се виждат в търга: подадените оферти, стъпката, оставащото време <b>estimated retail value от обявата</b> (данни на лота, не наша оценка) и <b>твоя бюджет</b>. Казва ти до каква сума да наддаваш, кога да спреш и предлага подобни коли, за които да запазиш парите. Не оценява сама пазарна стойност, не измисля участници и не показва „вероятност за успех“ — за това няма валидиран модел.</p>
         <h2>DAVID — гласът на търга</h2>
         <p>DAVID съобщава събитията: нови оферти, удължаване, оставащо време и край. Може да пуска собствени аудио записи; без тях използва български синтезиран глас или само надписи.</p>
         <p>Нито AiBidder, нито DAVID <b>наддават вместо теб</b>. Бутонът „Наддай“ и гласовата команда „наддай“ само отварят потвърждение, в което проверяваш сумата и потвърждаваш ръчно.</p>
@@ -274,26 +275,46 @@ export const APP_HTML = `
   <div class="aib-tabs" role="tablist" aria-label="AiBidder">
     <button type="button" role="tab" id="aib-t0" aria-controls="aib-p0" aria-selected="true" data-tab="0">Съвет</button>
     <button type="button" role="tab" id="aib-t1" aria-controls="aib-p1" aria-selected="false" tabindex="-1" data-tab="1">Защо</button>
+    <button type="button" role="tab" id="aib-t2" aria-controls="aib-p2" aria-selected="false" tabindex="-1" data-tab="2">Бюджет</button>
+    <button type="button" role="tab" id="aib-t3" aria-controls="aib-p3" aria-selected="false" tabindex="-1" data-tab="3">Подобни</button>
   </div>
   <div class="aib-pages" data-ref="aibPages">
     <div class="aib-page" role="tabpanel" id="aib-p0" aria-labelledby="aib-t0">
       <div class="aib-row"><span class="risk" data-ref="risk">—</span><span class="prob-pill">ВЕРОЯТНОСТ: НЯМА ДАННИ</span></div>
       <p class="adv-headline" data-ref="advHead">—</p>
-      <dl class="aib-kv">
-        <div><dt>Следваща оферта</dt><dd data-ref="aibNext">—</dd></div>
-        <div><dt>Retail стойност (обявена)</dt><dd data-ref="aibRetail">—</dd></div>
-      </dl>
-      <div class="aib-bar" aria-hidden="true"><i data-ref="aibBar"></i></div>
-      <p class="aib-sub" data-ref="aibSub"></p>
+      <ul class="aib-tips" data-ref="aibTips"></ul>
+      <div class="aib-acts">
+        <button type="button" class="btn ghost sm" data-goto="3" data-ref="aibSimilarBtn" hidden>Виж подобни коли</button>
+        <button type="button" class="btn ghost sm" data-goto="2" data-ref="aibBudgetBtn">Задай бюджет</button>
+      </div>
       <label class="check aib-speak"><input type="checkbox" data-ref="speakAdvice"> Изговаряй съветите (с гласа на DAVID)</label>
     </div>
     <div class="aib-page" role="tabpanel" id="aib-p1" aria-labelledby="aib-t1">
+      <div class="aib-erv"><span>Estimated retail value</span><b data-ref="aibErv">—</b><small>по данни от обявата · не е наша оценка</small></div>
       <ul class="adv-reasons" data-ref="advReasons"></ul>
       <h3>Наблюдавани сигнали</h3>
       <ul class="signals" data-ref="signals"></ul>
       <p class="prob"><span>Вероятност за успех:</span> <strong data-ref="prob">Няма достатъчно данни</strong>
         <button type="button" class="linkish" data-ref="probWhy" aria-expanded="false" aria-controls="prob-why">Защо?</button></p>
       <p class="prob-why" id="prob-why" data-ref="probWhyText" hidden></p>
+    </div>
+    <div class="aib-page" role="tabpanel" id="aib-p2" aria-labelledby="aib-t2">
+      <form class="aib-budget" data-ref="budgetForm" novalidate>
+        <label for="budget-in">Колко пари искаш да дадеш за колата?</label>
+        <div class="aib-budget-row"><input id="budget-in" data-ref="budgetInput" inputmode="numeric" autocomplete="off" placeholder="напр. 60 000"><span>€</span></div>
+        <div class="aib-budget-quick">
+          <button type="button" class="btn ghost sm" data-budget="erv">= Estimated retail value</button>
+          <button type="button" class="btn ghost sm" data-budget="+5000">+5 000 €</button>
+          <button type="button" class="btn ghost sm" data-budget="clear">Изчисти</button>
+        </div>
+        <button type="submit" class="btn sm aib-budget-save">Запази бюджета</button>
+        <p class="aib-budget-now" data-ref="budgetNow" role="status">—</p>
+        <p class="aib-sub">Бюджетът е твой ориентир и се пази само на това устройство. Можеш винаги да го увеличиш. AiBidder ще ти каже кога да спреш и ще предложи подобна кола.</p>
+      </form>
+    </div>
+    <div class="aib-page" role="tabpanel" id="aib-p3" aria-labelledby="aib-t3">
+      <p class="aib-sub" data-ref="similarNote">—</p>
+      <ul class="aib-similar" data-ref="similar"></ul>
     </div>
   </div>
 </section>
@@ -315,7 +336,7 @@ export const APP_HTML = `
   </div>
   <div class="aib-pages">
     <div class="aib-page" role="tabpanel" id="aii-p0" aria-labelledby="aii-t0">
-      <div class="aii-retail"><span>Retail стойност</span><b data-ref="aiiRetail">—</b><small data-ref="aiiRetailSrc"></small></div>
+      <div class="aii-retail"><span>Estimated retail value</span><b data-ref="aiiRetail">—</b><small data-ref="aiiRetailSrc"></small></div>
       <dl class="aii-list" data-ref="aiiSpecs"></dl>
     </div>
     <div class="aib-page" role="tabpanel" id="aii-p1" aria-labelledby="aii-t1">
