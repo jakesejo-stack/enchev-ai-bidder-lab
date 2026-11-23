@@ -282,6 +282,8 @@ export const APP_HTML = `
     <div class="aib-page" role="tabpanel" id="aib-p0" aria-labelledby="aib-t0">
       <div class="aib-row"><span class="risk" data-ref="risk">—</span><span class="prob-pill">ВЕРОЯТНОСТ: НЯМА ДАННИ</span></div>
       <p class="adv-headline" data-ref="advHead">—</p>
+      <div class="aib-quick" role="group" aria-label="Колко да заложиш" data-ref="aibQuick"></div>
+      <p class="aib-psy">Скок с по-голяма сума показва увереност и често обезкуражава другите — психология, не гаранция. Всяка сума се потвърждава от теб.</p>
       <ul class="aib-tips" data-ref="aibTips"></ul>
       <div class="aib-acts">
         <button type="button" class="btn ghost sm" data-goto="3" data-ref="aibSimilarBtn" hidden>Виж подобни коли</button>

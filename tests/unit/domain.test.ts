@@ -8,6 +8,7 @@ import { euros, formatEur, parseEurInput } from '../../src/domain/money.js';
 import { DEMO_LOT, DEMO_RULES, DemoAuctionServer } from '../../src/adapters/demo-server.js';
 import { CONCEPT_LOT, SIMILAR_LOTS } from '../../src/adapters/demo-lots.js';
 import { similarLots } from '../../src/domain/similar.js';
+import { quickBids } from '../../src/domain/advisor.js';
 import type { AuctionEvent, BidRecord, SnapshotEvent } from '../../src/domain/types.js';
 
 const bid = (id: string, who: string, eur: number, t = 1000): BidRecord => ({ bidId: id, bidderId: who, amount: euros(eur), serverTime: t });
@@ -161,6 +162,23 @@ test('advisor: over budget, leading, offline, ended, no budget', () => {
   assert.equal(advise({ auction: s, cap: euros(60_000), myBidderId: 'me', serverNow: 100_000, connection: 'offline' }).action, 'offline');
   assert.equal(advise({ auction: stateWith([], 'ended'), cap: euros(60_000), myBidderId: 'me', serverNow: 100_000, connection: 'online' }).action, 'ended');
   assert.equal(advise({ auction: s, cap: null, myBidderId: 'me', serverNow: 100_000, connection: 'online' }).action, 'can_bid', 'no budget: bidding is allowed');
+});
+
+test('quick bids: minimum + bigger jumps, all valid on the step grid, budget marked', () => {
+  const st = stateWith([bid('a', 'other', 60_200, 100_000)]);
+  const q = quickBids(st, euros(63_000));
+  assert.equal(q.length, 4);
+  assert.equal(q[0]!.min, true);
+  assert.equal(q[0]!.amount, euros(61_200));
+  const step = stepFor(euros(60_200), DEMO_RULES);
+  for (const x of q) assert.equal((x.amount - q[0]!.amount) % step, 0, `${x.amount} on the step grid`);
+  assert.deepEqual(q.map((x) => x.amount), [euros(61_200), euros(63_200), euros(64_200), euros(65_200)], 'jumps of ~2 500 / 3 700 / 5 000 rounded up to the 1 000 € grid');
+  assert.deepEqual(q.map((x) => x.plus), [euros(1_000), euros(3_000), euros(4_000), euros(5_000)]);
+  assert.deepEqual(q.map((x) => x.overBudget), [false, true, true, true]);
+  assert.equal(new Set(q.map((x) => x.amount)).size, q.length, 'no duplicates');
+  const empty = quickBids(stateWith([]), null);
+  assert.equal(empty[0]!.amount, nextValidBid(DEMO_LOT, DEMO_RULES, []));
+  assert.ok(empty.every((x) => !x.overBudget));
 });
 
 test('similar cars: other lots, the ones within budget first, closest estimated retail value next', () => {

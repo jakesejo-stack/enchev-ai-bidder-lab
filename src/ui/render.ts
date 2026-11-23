@@ -15,6 +15,7 @@ import { auctionsCsv, bidsCsv, dayString, rangeFor, summarize, type RangeKind, t
 import { availableSources, defaultSource, demoAllowed, type SourceKind } from '../analytics/sources.js';
 import { generateDemoHistory } from '../analytics/demo-history.js';
 import { similarLots } from '../domain/similar.js';
+import { quickBids } from '../domain/advisor.js';
 import { DEMO_LOT, SIMILAR_LOTS } from '../adapters/demo-lots.js';
 
 const ROUTES = ['live', 'dashboard', 'ai', 'bids', 'history', 'real', 'settings'] as const;
@@ -281,6 +282,12 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
       budgetInput.focus();
       return;
     }
+    const qb = t.closest<HTMLButtonElement>('[data-quick]');
+    if (qb && !qb.disabled) {
+      bubble.setOpen(false, false);
+      ctrl.openConfirmAt(Number(qb.dataset.quick));
+      return;
+    }
     const sw = t.closest<HTMLButtonElement>('[data-switch]');
     if (sw && demo) {
       const target = [DEMO_LOT, ...SIMILAR_LOTS].find((l) => l.lotId === sw.dataset.switch);
@@ -410,6 +417,11 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     setText(ref('current'), top ? formatEur(top.amount) : lot ? formatEur(lot.startPrice) : '—');
     setText(ref('currentBy'), top ? (top.bidderId === ctrl.adapter.bidderId ? 'Твоя оферта' : top.bidderId) : lot ? `Няма оферти · старт от ${formatEur(lot.startPrice)}` : '');
     setText(ref('next'), next !== null ? formatEur(next) : '—');
+    // New bid → the numbers glow green and white for a moment.
+    if (top && top.bidId !== lastGlowBid) {
+      if (lastGlowBid !== '') for (const k of ['current', 'next', 'ctaAmount', 'cta2Amount']) glow(ref(k));
+      lastGlowBid = top.bidId;
+    }
     setText(ref('stepLine'), step !== null ? `Стъпка ${formatEur(step)}` : '');
     const statusText = ended ? 'ДЕМО · Търгът приключи' : conn !== 'online' ? 'ДЕМО · Няма връзка — наддаването е спряно' : 'ДЕМО · Активен търг · Наддаване в реално време';
     setText(ref('statusText'), statusText);
@@ -519,6 +531,8 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     }
     aib.setAttribute('aria-label', `AiBidder — съвети. Риск: ${adv.risk}.${aib.dataset.new ? ' Нов съвет.' : ''}`);
     const retailV = lot?.retailValue ?? null;
+    const blocked = !!ctrl.blockReason && ctrl.blockReason !== 'НАД БЮДЖЕТА';
+    setHtml(ref('aibQuick'), quickBids(ctrl.auction, ctrl.cap).map((q) => `<button type="button" class="qb" data-quick="${q.amount}" data-min="${q.min}" ${blocked || q.overBudget ? 'disabled' : ''}><span class="qb-plus">${q.min ? 'Минимум' : `+${formatEur(q.plus)}`}</span><b>${formatEur(q.amount)}</b>${q.overBudget ? '<small>над бюджета</small>' : ''}</button>`).join(''), html);
     setHtml(ref('aibTips'), adv.tips.map((t) => `<li>${esc(t)}</li>`).join(''), html);
     ref('aibSimilarBtn').hidden = !adv.suggestSimilar;
     setText(ref('aibBudgetBtn'), ctrl.cap === null ? 'Задай бюджет' : `Бюджет: ${formatEur(ctrl.cap)}`);
@@ -633,6 +647,13 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     lastAttemptState = now;
   }
 
+  let lastGlowBid = '';
+  function glow(el: HTMLElement | null): void {
+    if (!el) return;
+    el.classList.remove('glow');
+    void el.offsetWidth; // restart the animation for every new bid
+    el.classList.add('glow');
+  }
   ctrl.subscribe(render);
   applyRoute(false);
 }

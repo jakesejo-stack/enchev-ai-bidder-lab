@@ -32,7 +32,9 @@ export const CLIP_KEYS = {
 export type ClipKey = keyof typeof CLIP_KEYS;
 export const isClipKey = (k: string): k is ClipKey => Object.prototype.hasOwnProperty.call(CLIP_KEYS, k);
 
-interface QueueItem { text: string; kind: CaptionKind; key?: string; clip?: ClipKey; }
+interface QueueItem { text: string; kind: CaptionKind; key?: string; clip?: ClipKey; fast?: boolean; }
+/** Auctioneer pace: price calls are spoken this much faster than the chosen rate. */
+export const FAST_RATE = 1.3;
 interface AudioLike {
   src: string; playbackRate: number;
   onended: ((ev: Event) => unknown) | null; onerror: ((ev: Event) => unknown) | null;
@@ -126,14 +128,14 @@ export class David {
   }
 
   /** Add a caption and (if enabled) voice it. `key` coalesces: a newer item replaces a queued one. */
-  say(text: string, kind: CaptionKind = 'event', key?: string, clip?: ClipKey): Caption {
+  say(text: string, kind: CaptionKind = 'event', key?: string, clip?: ClipKey, fast = false): Caption {
     const cap: Caption = { id: this.nextId++, at: Date.now(), text, kind };
     this.captions.push(cap);
     if (this.captions.length > 300) this.captions.splice(0, this.captions.length - 300);
     const voiced = (clip && this.hasClips && this.clips.has(clip)) || this.canTts;
     if (this.enabled && voiced) {
       if (key) this.queue = this.queue.filter((q) => q.key !== key);
-      const item: QueueItem = { text, kind, ...(key ? { key } : {}), ...(clip ? { clip } : {}) };
+      const item: QueueItem = { text, kind, ...(key ? { key } : {}), ...(clip ? { clip } : {}), ...(fast ? { fast } : {}) };
       if (kind === 'alert') this.queue.unshift(item); else this.queue.push(item);
       if (this.queue.length > 6) this.queue.splice(6); // never fall far behind the live auction
       this.pump();
@@ -171,7 +173,7 @@ export class David {
     a.onended = () => { if (!settled) { settled = true; this.finish(item); } };
     a.onerror = fallback;
     a.src = url;
-    a.playbackRate = this.rate;
+    a.playbackRate = item.fast ? Math.min(2, this.rate * FAST_RATE) : this.rate;
     this.speaking = true;
     this.playedClips.push(item.clip!);
     this.onChange();
@@ -182,7 +184,7 @@ export class David {
     const u = new SpeechSynthesisUtterance(item.text);
     u.lang = this.voice!.lang;
     u.voice = this.voice;
-    u.rate = this.rate;
+    u.rate = item.fast ? Math.min(2, this.rate * FAST_RATE) : this.rate;
     u.onend = () => this.finish(item);
     u.onerror = () => this.finish(item);
     this.speaking = true;

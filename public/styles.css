@@ -564,3 +564,30 @@ html.hc .demo-strip { background: #000; color: #ffe08a; }
 .viewer-none { display: none; }
 .viewer[data-model="none"] canvas, .viewer[data-model="none"] .viewer-poster, .viewer[data-model="none"] .viewer-tag, .viewer[data-model="none"] .viewer-hint { display: none !important; }
 .viewer[data-model="none"] .viewer-none { display: grid; place-items: center; position: absolute; inset: 0; z-index: 2; font-size: .82rem; color: var(--muted); text-align: center; padding: 16px; }
+
+/* New bid: numbers glow green and white */
+@keyframes num-glow {
+  0% { text-shadow: none; transform: scale(1); }
+  15% { color: #fff; text-shadow: 0 0 6px #fff, 0 0 18px rgba(60,207,122,.95), 0 0 38px rgba(60,207,122,.75); transform: scale(1.08); }
+  50% { color: #d6ffe6; text-shadow: 0 0 4px rgba(255,255,255,.7), 0 0 22px rgba(60,207,122,.65); transform: scale(1.02); }
+  100% { text-shadow: none; transform: scale(1); }
+}
+@keyframes tile-glow {
+  15% { border-color: rgba(60,207,122,.95); box-shadow: 0 0 0 1px rgba(255,255,255,.5), 0 0 28px rgba(60,207,122,.45), inset 0 0 22px rgba(60,207,122,.18); }
+  100% { box-shadow: none; }
+}
+.glow { display: inline-block; animation: num-glow 1.3s ease-out; }
+.tile:has(.tile-val.glow) { animation: tile-glow 1.3s ease-out; }
+.cta .glow { animation-duration: 1s; }
+
+/* AiBidder: how much to bid — round quick options */
+.aib-quick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.qb { min-height: 58px; border-radius: 999px; border: 1px solid rgba(60,207,122,.45); background: radial-gradient(ellipse at 50% 0%, rgba(60,207,122,.18), rgba(10,12,16,.9) 70%); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; cursor: pointer; font: inherit; padding: 4px 10px; transition: transform .15s, box-shadow .2s; }
+.qb b { font-size: 1.02rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.qb-plus { font-size: .68rem; color: #9ff0c1; font-weight: 700; letter-spacing: .03em; }
+.qb small { font-size: .6rem; color: #f7dc95; }
+.qb[data-min="true"] { border-color: rgba(255,255,255,.55); background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,.14), rgba(10,12,16,.9) 70%); }
+.qb[data-min="true"] .qb-plus { color: #fff; }
+.qb:not(:disabled):hover, .qb:not(:disabled):focus-visible { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(255,255,255,.6), 0 0 22px rgba(60,207,122,.55); }
+.qb:disabled { opacity: .42; cursor: not-allowed; }
+.aib-psy { margin: 6px 2px 0; font-size: .7rem; color: var(--muted); line-height: 1.4; }

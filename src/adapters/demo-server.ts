@@ -201,7 +201,10 @@ export class DemoAuctionServer {
   endIn(ms: number): void {
     if (this.status !== 'active') return;
     this.endsAt = this.now() + ms;
-    this.emit({ type: 'extension', seq: ++this.seq, serverTime: this.now(), endsAt: this.endsAt, byMs: 0 });
+    // Shortening the end is not an extension (clients never move the end earlier on an extension),
+    // so the server publishes an authoritative snapshot with the new end.
+    ++this.seq;
+    this.emit(this.snapshot());
   }
 
   private accept(bidderId: string, amount: number): BidRecord {

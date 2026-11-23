@@ -130,3 +130,26 @@ export function advise({ auction, cap, myBidderId, serverNow, connection }: Advi
   if (retail !== null && (cap === null || cap >= retail)) tips.push(`Над ${formatEur(retail)} (estimated retail value) препоръчваме да спреш.`);
   return out('can_bid', risk, walkAway !== null ? `Можеш да наддаваш до ${formatEur(walkAway)}.` : `Следващата валидна оферта е ${formatEur(next)}.`);
 }
+
+/** Jump targets offered by AiBidder (added to the current price, then put on the auction's step grid). */
+export const QUICK_JUMPS: Cents[] = [100_000, 250_000, 370_000, 500_000];
+
+export interface QuickBid { amount: Cents; plus: Cents; min: boolean; overBudget: boolean; }
+
+/** The minimum valid bid plus up to three bigger jumps, all valid on the step grid, under the house maximum. */
+export function quickBids(auction: AuctionState, cap: Cents | null): QuickBid[] {
+  const { lot, rules, bids } = auction;
+  if (!lot || !rules) return [];
+  const next = nextValidBid(lot, rules, bids);
+  const top = highestBid(bids);
+  const base = top ? top.amount : lot.startPrice;
+  const step = top ? stepFor(top.amount, rules) : stepFor(lot.startPrice, rules);
+  const amounts = [next];
+  for (const j of QUICK_JUMPS) {
+    const want = base + j;
+    const a = want <= next ? next : next + Math.ceil((want - next) / step) * step;
+    if (!amounts.includes(a) && (rules.maxBid === null || a <= rules.maxBid)) amounts.push(a);
+    if (amounts.length === 4) break;
+  }
+  return amounts.map((amount, i) => ({ amount, plus: amount - base, min: i === 0, overBudget: cap !== null && amount > cap }));
+}

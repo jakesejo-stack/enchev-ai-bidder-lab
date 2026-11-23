@@ -33,7 +33,9 @@ export interface ConfirmState {
 export interface Settings { speakAdvice: boolean; highContrast: boolean; rate: number; }
 
 const STORE_KEY = 'enchev-ai-bidder-lab:v1';
-const THRESHOLDS = [60_000, 30_000, 10_000];
+const THRESHOLDS = [60_000, 30_000];
+/** Auctioneer calls on the current highest bid; re-armed by every new bid or extension. */
+const CALLS: [number, string][] = [[9_000, 'първи път'], [6_000, 'втори път'], [3_000, 'трети път']];
 
 /** The user's optional budget (set in AiBidder) is capped at the auction maximum (1 000 000 €). */
 export const CAP_MAX: Cents = 100_000_000;
@@ -65,6 +67,7 @@ export class Controller {
   readonly eventTaps: ((e: AuctionEvent) => void)[] = [];
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private warned = new Set<number>();
+  private called = new Set<number>();
   private lastAdviceAction = '';
   private lastEndsAt = 0;
   private scheduled = false;
@@ -155,6 +158,7 @@ export class Controller {
       // Re-arm time warnings that are now in the future again (after an extension).
       const rem = this.remainingMs;
       for (const t of THRESHOLDS) if (rem > t + 1000) this.warned.delete(t);
+      for (const [t] of CALLS) if (rem > t + 500) this.called.delete(t);
       this.lastEndsAt = this.auction.endsAt;
     }
     if (this.confirm.open && !this.confirm.pending && this.nextValid !== null && this.auction.lot && this.auction.rules) {
@@ -184,9 +188,13 @@ export class Controller {
       case 'bid': {
         const mine = e.bid.bidderId === this.adapter.bidderId;
         this.log.push({ at, text: `${mine ? 'Ти' : e.bid.bidderId}: ${formatEur(e.bid.amount)}`, kind: mine ? 'mine' : 'bid' });
-        if (mine) this.david.say(`Твоята оферта от ${speakEur(e.bid.amount)} е най-високата.`, 'event', 'price', 'you_lead');
-        else if (wasLeading) this.david.say(`Някой те надмина: ${speakEur(e.bid.amount)}.`, 'alert', 'price', 'outbid');
-        else this.david.say(`Има нова оферта: ${speakEur(e.bid.amount)}.`, 'event', 'price', 'new_bid');
+        // Auctioneer chant: the amount, then "do I hear" the next valid bid.
+        this.called.clear();
+        const { lot, rules } = this.auction;
+        const ask = lot && rules ? ` Чувам ли ${speakEur(nextValidBid(lot, rules, this.auction.bids))}?` : '';
+        if (mine) this.david.say(`${speakEur(e.bid.amount)} — твоята оферта!${ask}`, 'event', 'price', 'you_lead', true);
+        else if (wasLeading) this.david.say(`Надминат си: ${speakEur(e.bid.amount)}!${ask}`, 'alert', 'price', 'outbid', true);
+        else this.david.say(`${speakEur(e.bid.amount)}!${ask}`, 'event', 'price', 'new_bid', true);
         break;
       }
       case 'extension':
@@ -205,7 +213,10 @@ export class Controller {
         if (e.status === 'ended') {
           const top = highestBid(this.auction.bids);
           const mine = top?.bidderId === this.adapter.bidderId;
-          this.david.say(mine ? `Търгът приключи. Твоята оферта от ${speakEur(top!.amount)} е най-високата.` : `Търгът приключи${top ? ` при ${speakEur(top.amount)}` : ''}.`, 'alert', undefined, mine ? 'ended_won' : 'ended');
+          const demo = this.auction.lot?.demo ? ' Това е демо — нищо не се плаща.' : '';
+          this.david.say(!top ? 'Търгът приключи без оферти.'
+            : mine ? `Продадено за ${speakEur(top.amount)}! Поздравления — печелиш ти! Моля, заплати по фактурата в срок.${demo}`
+            : `Продадено за ${speakEur(top.amount)}! Моля, победителят да заплати по фактурата в срок.${demo}`, 'alert', undefined, mine ? 'ended_won' : 'ended', true);
         }
         break;
     }
@@ -264,6 +275,17 @@ export class Controller {
           this.warned.add(t); // passed silently (e.g. joined late)
         }
       }
+      // Going once, twice, three times — on the current highest bid.
+      const top = highestBid(this.auction.bids);
+      for (const [t, call] of CALLS) {
+        if (rem <= t && rem > t - 2000 && !this.called.has(t)) {
+          this.called.add(t);
+          if (top) this.david.say(`${speakEur(top.amount)} — ${call}!`, 'alert', 'call', undefined, true);
+          else if (t === CALLS[0]![0] && this.nextValid !== null) this.david.say(`Още няма оферти. Чувам ли ${speakEur(this.nextValid)}?`, 'alert', 'call', undefined, true);
+        } else if (rem <= t - 2000) {
+          this.called.add(t);
+        }
+      }
     }
     this.refreshAdvice();
     this.notify();
@@ -290,6 +312,12 @@ export class Controller {
     if (this.blockReason || this.nextValid === null) return;
     this.confirm = { open: true, amount: this.nextValid, key: uid(), consent: false, pending: false, error: null, priceMoved: false };
     this.notify();
+  }
+
+  /** Opens the confirmation with a chosen valid amount (e.g. an AiBidder quick option). Consent is still required. */
+  openConfirmAt(amount: Cents): void {
+    this.openConfirm();
+    if (this.confirm.open) this.setConfirmAmount(amount);
   }
 
   closeConfirm(): void {
