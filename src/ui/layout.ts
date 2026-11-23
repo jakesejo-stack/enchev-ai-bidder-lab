@@ -8,6 +8,7 @@ const navItems: [string, string, string][] = [
   ['ai', 'chip', 'AI наддаване'],
   ['bids', 'layers', 'Моите оферти'],
   ['mycars', 'car', 'Моите коли'],
+  ['wallet', 'wallet', 'Портфейл'],
   ['history', 'clock', 'История'],
   ['real', 'wifi', 'Реални данни'],
   ['settings', 'gear', 'Настройки'],
@@ -204,6 +205,7 @@ export const APP_HTML = `
 
     <section class="view view-office" data-view="mycars" aria-labelledby="mc-h" hidden><div data-ref="mycars"></div></section>
     <section class="view view-office" data-view="office" aria-labelledby="of-h" hidden><div data-ref="office"></div></section>
+    <section class="view view-office" data-view="wallet" aria-labelledby="wl-h" hidden><div data-ref="wallet"></div></section>
     <section class="view view-office" data-view="passport" aria-labelledby="pp-h" hidden><div data-ref="passport"></div></section>
 
     <section class="view" data-view="history" aria-labelledby="hist-h" hidden>

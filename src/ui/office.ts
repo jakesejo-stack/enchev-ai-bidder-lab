@@ -85,7 +85,7 @@ export function mountOffice({ book, ctrl, toast, ref }: OfficeDeps) {
     const deals = book.list();
     const offers = book.offers.filter((o) => o.status === 'open');
     put(ref('mycars'), `
-      <div class="of-head"><h1 id="mc-h">${icon('car')} Моите коли</h1><span class="demo-badge">ДЕМО</span></div>
+      <div class="of-head"><h1 id="mc-h">${icon('car')} Моите коли</h1><a class="btn sm" href="#/wallet">${icon('wallet')} Портфейл</a></div>
       <p class="muted">Тук са само колите, които си спечелил. Всяка има свой Офис: решение, документи, плащане и транспорт.</p>
       ${offers.map(offerCard).join('')}
       ${deals.length ? `<div class="mc-grid">${deals.map(dealCard).join('')}</div>` : `<div class="card mc-empty"><p>Още нямаш спечелени коли.</p><p class="muted">Спечели демо търг и колата ще се появи тук автоматично — записва я сървърът на търга, не бутон.</p><a class="btn" href="#/live">${icon('gavel')} Към търга</a></div>`}

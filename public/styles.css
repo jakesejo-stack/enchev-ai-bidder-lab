@@ -821,3 +821,22 @@ html.doc-open body { overflow: hidden; }
   .of-inv td:nth-child(2), .of-quote td:nth-child(2) { font-size: .7rem; }
   .of-inv tfoot th, .of-quote tfoot th { font-size: .9rem; }
 }
+
+/* ---------------- Портфейл ---------------- */
+.wl-env { padding: 8px 14px; border-radius: 999px; font-weight: 800; font-size: .76rem; letter-spacing: .06em; border: 1px solid var(--line2); }
+.wl-env.sandbox { border-color: rgba(242,193,78,.7); color: #f7dc95; background: rgba(242,193,78,.08); }
+.wl-env.live { border-color: rgba(60,207,122,.8); color: #c6f6da; background: rgba(60,207,122,.12); }
+.wl-env.off { color: #ffb3b9; border-color: rgba(229,55,69,.6); }
+.of-form input { min-height: 44px; border-radius: 10px; border: 1px solid var(--line2); background: #14161c; padding: 0 12px; color: #fff; }
+.of-form input[readonly] { color: var(--muted); }
+.wl-dep { font-size: 1.1rem; }
+.wl-dep b { color: #f7dc95; }
+.wl-rules { margin: 8px 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; line-height: 1.45; }
+.wl-ledger tr[data-state="authorised"] td:nth-child(3) { color: #f7dc95; font-weight: 700; }
+.wl-ledger tr[data-state="cancelled"] td:nth-child(3) { color: #c6f6da; font-weight: 700; }
+.wl-ledger tr[data-state="completed"] td:nth-child(3) { color: #ffb3b9; font-weight: 700; }
+.wl-note p { display: flex; gap: 8px; margin: 0; font-size: .86rem; line-height: 1.45; }
+.wl-token { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--muted); margin: 8px 0; }
+.wl-token input { min-height: 44px; border-radius: 10px; border: 1px solid var(--line2); background: #14161c; padding: 0 12px; color: #fff; }
+.wl-op { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+.wl-op span { flex: 1 1 100%; font-size: .84rem; }

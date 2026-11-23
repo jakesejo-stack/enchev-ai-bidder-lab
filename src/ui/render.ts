@@ -20,8 +20,9 @@ import { quickBids } from '../domain/advisor.js';
 import { DEMO_LOT, SIMILAR_LOTS } from '../adapters/demo-lots.js';
 import type { DealBook } from '../deal/book.js';
 import { mountOffice } from './office.js';
+import { mountWallet } from './wallet.js';
 
-const ROUTES = ['live', 'dashboard', 'ai', 'bids', 'mycars', 'office', 'passport', 'history', 'real', 'settings'] as const;
+const ROUTES = ['live', 'dashboard', 'ai', 'bids', 'mycars', 'office', 'passport', 'wallet', 'history', 'real', 'settings'] as const;
 type Route = (typeof ROUTES)[number];
 const timeFmt = new Intl.DateTimeFormat('bg-BG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
@@ -74,6 +75,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
 
   // ------------------------------------------------------------ routing
   let officeUi: ReturnType<typeof mountOffice> | null = null;
+  let walletUi: ReturnType<typeof mountWallet> | null = null;
   /** "#/office/<id>" → route "office", param "<id>". */
   function routeParts(): [Route, string] {
     const [head = '', ...rest] = location.hash.replace(/^#\/?/, '').split('/');
@@ -93,6 +95,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     bubble.layout(); // the bid bar shows only on the live view (phones)
     info.layout();
     officeUi?.show(r, routeParts()[1]);
+    walletUi?.show(r === 'wallet');
     syncRealPolling();
     if (r === 'real') {
       if (bubble.isOpen) bubble.setOpen(false, false);
@@ -709,5 +712,6 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
   ctrl.subscribe(render);
   if (book) officeUi = mountOffice({ book, ctrl, toast, ref });
   else ref('wonCta').hidden = true;
+  walletUi = mountWallet({ ctrl, toast, ref });
   applyRoute(false);
 }

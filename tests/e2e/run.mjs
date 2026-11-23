@@ -896,6 +896,30 @@ await run('phone 390: „Моите коли“ and the Office fit the screen; 6
   await p.screenshot({ path: join(shots, 'mobile-390-office.png'), fullPage: true });
 });
 
+await run('Портфейл: Вход (депозит през Revolut Sandbox) и Изход — движенията идват само от Revolut', { query: '?seed=3&competitors=0' }, async (p) => {
+  // Not configured → clear message, no deposit possible.
+  await p.route('**/api/wallet/status', (r) => r.fulfill({ json: { environment: 'sandbox', connected: false, reason: 'Revolut ключът не е настроен (REVOLUT_SECRET_KEY във Vercel).', realMoney: false, webhookVerified: false, rules: { rate: 0.1, minCents: 30000, fixedCents: null }, payout: { enabled: false, reason: 'само след KYB' } } }));
+  await p.click('.sidenav a[data-nav="wallet"]');
+  await waitText(p, '[data-ref="wallet"]', 'Не е свързан');
+  expect(await p.locator('[data-wl="deposit"]').isDisabled(), 'no deposit without Revolut');
+  // Sandbox connected: the rule is applied, the ledger is read-only from Revolut.
+  await p.unroute('**/api/wallet/status');
+  await p.route('**/api/wallet/status', (r) => r.fulfill({ json: { environment: 'sandbox', connected: true, reason: null, realMoney: false, webhookVerified: true, rules: { rate: 0.1, minCents: 30000, fixedCents: null }, payout: { enabled: false, reason: 'само след KYB' } } }));
+  await p.route('**/api/wallet/ledger**', (r) => r.fulfill({ json: { entries: [{ orderId: '6516e61c-d279-a454-a837-bc52ce55ed49', kind: 'deposit', lot: 'DEMO-0001', amount: 250000, capturedAmount: 0, refunded: 0, currency: 'EUR', state: 'authorised', label: 'Задържан (вход)', createdAt: '2026-11-23T18:00:00Z', updatedAt: null }] } }));
+  let sent = null;
+  await p.route('**/api/wallet/deposit', (r) => { sent = r.request().postDataJSON(); return r.fulfill({ json: { orderId: 'x', checkoutUrl: `${base}/#/wallet?checkout=sandbox`, amount: 250000 } }); });
+  await p.click('[data-wl="refresh"]');
+  await waitText(p, '[data-ref="wallet"]', 'REVOLUT SANDBOX');
+  await waitText(p, '.wl-ledger', 'Задържан (вход)');
+  await p.fill('[data-wl="max"]', '25000');
+  await waitText(p, '.wl-dep', '2500,00');
+  await p.screenshot({ path: join(shots, 'wallet-desktop.png'), fullPage: true });
+  await p.click('[data-wl="deposit"]');
+  await p.waitForFunction(() => location.hash.includes('checkout=sandbox'));
+  expect(sent && sent.maxBid === 2500000 && sent.lotId === 'DEMO-0001' && /^b_/.test(sent.bidder) && !('amount' in sent), `deposit request: ${JSON.stringify(sent)}`);
+  return 'sandbox';
+});
+
 await browser.close();
 srv.close();
 const passed = results.filter((r) => r.status === 'pass').length;
