@@ -1,19 +1,26 @@
 // "Портфейл": Вход (deposit hold through Revolut) and Изход (release / penalty / refund), with a read-only
 // ledger read from Revolut. Sandbox until the owner approves real money.
 import type { Controller } from '../app/controller.js';
-import { bidderId, depositFor, wallet, type LedgerEntry, type WalletStatus } from '../wallet/client.js';
+import { adoptBidder, bidderId, depositFor, wallet, type LedgerEntry, type WalletStatus } from '../wallet/client.js';
+import type { DealBook } from '../deal/book.js';
+import { emptyDeal, applyDeal, type DealState } from '../deal/office.js';
+import { quoteFor } from '../deal/office.js';
+import { qrSvg } from '../deal/qr.js';
+import { euros } from '../domain/money.js';
+import { settlementCard } from './settlement-view.js';
 import { formatEurExact, parseEurInput } from '../domain/money.js';
 import { icon } from './icons.js';
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const dt = new Intl.DateTimeFormat('bg-BG', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
-export interface WalletDeps { ctrl: Controller; toast: (t: string, tone?: 'ok' | 'bad' | 'info') => void; ref: (name: string) => HTMLElement; }
+export interface WalletDeps { ctrl: Controller; toast: (t: string, tone?: 'ok' | 'bad' | 'info') => void; ref: (name: string) => HTMLElement; book: DealBook | null; }
 
-export function mountWallet({ ctrl, toast, ref }: WalletDeps) {
+export function mountWallet({ ctrl, toast, ref, book }: WalletDeps) {
   const storage = (() => { try { return window.localStorage; } catch { return null; } })();
   const session = (() => { try { return window.sessionStorage; } catch { return null; } })();
-  const me = bidderId(storage);
+  let me = bidderId(storage);
+  let pair: { url: string; expiresAt: number; signed: boolean } | null = null;
   let status: WalletStatus | null = null;
   let statusErr = false;
   let entries: LedgerEntry[] = [];
@@ -21,6 +28,15 @@ export function mountWallet({ ctrl, toast, ref }: WalletDeps) {
   let maxBid = 0;
   let busy = false;
   let active = false;
+
+  /** A paid deal to explain the split: your latest paid one, else an example (25 000 €, delivery to Plovdiv). */
+  function splitState(): { s: DealState; example: boolean } {
+    const paid = book?.list().find((d) => d.state.paid);
+    if (paid) return { s: paid.state, example: false };
+    const deal = { dealId: 'example', lotId: 'ПРИМЕР', title: 'Пример', vin: 'EXAMPLE0000000000', amount: euros(25_000), origin: 'EU' as const, location: 'София, BG', wonAt: 0, specs: [], viaSecondChance: false, runnerUps: [] };
+    const st = applyDeal(emptyDeal(), { seq: 1, at: 0, actor: 'server', body: { type: 'won', ...deal }, prev: '', hash: 'x' });
+    return { s: { ...st, delivery: { mode: 'delivery', cityId: 'plovdiv', quote: quoteFor(deal, 'plovdiv', 'truck') } }, example: true };
+  }
 
   function envChip(): string {
     if (statusErr || !status) return `<span class="wl-env off">Сървърът на портфейла не отговаря</span>`;
@@ -58,7 +74,22 @@ export function mountWallet({ ctrl, toast, ref }: WalletDeps) {
           </ul>
           <p class="muted small">Решенията взима сървърът на търга, не бутон в браузъра. „Върнат“ се показва само след потвърждение от Revolut.</p>
         </section>
+        <section class="card wl-methods" aria-labelledby="wm-h"><h2 id="wm-h">${icon('check')} Методи за плащане</h2>
+          <ul class="wl-rules">
+            <li><b>Карта</b> (Visa, Mastercard) — за депозита и за плащането.</li>
+            <li><b>Apple Pay / Google Pay</b> — на телефона, ако картата ти го поддържа.</li>
+            <li><b>Revolut Pay</b> — за плащането на колата. За депозита не става: задържането работи само с карта.</li>
+            <li><b>Банков превод (SEPA)</b> — препоръчваме го за цената на колата.</li>
+          </ul>
+          <p class="muted small">Методите ги показва страницата на Revolut според телефона или компютъра. ENCHEV не вижда данните на картата.</p>
+        </section>
+        ${(() => { const x = splitState(); return settlementCard(x.s, x.example); })()}
       </div><div class="of-col">
+        <section class="card wl-qr" aria-labelledby="wq-h"><h2 id="wq-h">${icon('chip')} Продължи на телефона</h2>
+          ${pair && pair.expiresAt > Date.now() ? `<div class="wl-qr-box">${qrSvg(pair.url, 'QR код за отваряне на портфейла на телефона')}</div>
+          <p class="muted small">Сканирай с камерата на телефона. Отваря същия профил и същите движения. Важи <b data-cd="${pair.expiresAt}">5:00 мин</b>.${pair.signed ? '' : ' Тестов код без подпис (няма ENCHEV_PAIR_SECRET) — само в Sandbox.'}</p>` : '<p class="muted">Покажи QR код и го сканирай с телефона, за да платиш оттам: Apple Pay, Google Pay или карта.</p>'}
+          <div class="of-actions"><button type="button" class="btn sm" data-wl="pair">${pair ? 'Нов QR код' : 'Покажи QR код'}</button></div>
+        </section>
         <section class="card wl-ledger" aria-labelledby="wlg-h"><h2 id="wlg-h">${icon('layers')} Движения (от Revolut)</h2>
           ${entries.length ? `<table class="tbl"><thead><tr><th scope="col">Дата</th><th scope="col">Лот</th><th scope="col">Състояние</th><th scope="col" class="num">Сума</th></tr></thead><tbody>${entries.map((e) => `<tr data-state="${esc(e.state)}"><td>${e.createdAt ? esc(dt.format(new Date(e.createdAt))) : '—'}</td><td>${esc(e.lot || '—')}</td><td>${esc(e.label)}</td><td class="num">${formatEurExact(e.amount)}${e.refunded ? `<small> · върнати ${formatEurExact(e.refunded)}</small>` : ''}</td></tr>`).join('')}</tbody></table>` : `<p class="muted">${esc(ledgerNote || 'Още няма движения.')}</p>`}
           <div class="of-actions"><button type="button" class="btn ghost sm" data-wl="refresh">Обнови от Revolut</button></div>
@@ -107,6 +138,14 @@ export function mountWallet({ ctrl, toast, ref }: WalletDeps) {
     const b = (e.target as Element).closest<HTMLButtonElement>('[data-wl]');
     if (!b || b.disabled || b.tagName !== 'BUTTON') return;
     const act = b.dataset.wl;
+    if (act === 'pair') {
+      void wallet.pairCode(me).then((r) => {
+        if (!r.ok || !r.data?.code) { toast(r.data?.message ?? 'Сървърът не издаде код.', 'bad'); return; }
+        pair = { url: `${location.origin}/#/wallet/pair/${encodeURIComponent(r.data.code)}`, expiresAt: r.data.expiresAt ?? Date.now() + 300_000, signed: !!r.data.signed };
+        render();
+      });
+      return;
+    }
     if (act === 'refresh') { void refresh().then(() => toast('Обновено от Revolut.', 'info')); return; }
     if (act === 'deposit') {
       const lot = ctrl.auction.lot;
@@ -131,8 +170,17 @@ export function mountWallet({ ctrl, toast, ref }: WalletDeps) {
   });
 
   return {
-    show(on: boolean): void {
+    show(on: boolean, param = ''): void {
       active = on;
+      if (on && param.startsWith('pair/')) {
+        const code = decodeURIComponent(param.slice(5));
+        void wallet.redeem(code).then((r) => {
+          if (r.ok && r.data?.bidder && adoptBidder(storage, r.data.bidder)) { me = r.data.bidder; toast('Свързан с профила от компютъра.', 'ok'); }
+          else toast(r.data?.message ?? 'QR кодът не е валиден.', 'bad');
+          location.replace('#/wallet');
+        });
+        return;
+      }
       if (on) { render(); void refresh(); }
     },
   };

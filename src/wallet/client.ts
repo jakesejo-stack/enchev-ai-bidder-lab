@@ -14,6 +14,13 @@ export interface LedgerEntry {
 
 const KEY = 'enchev-wallet-bidder-v1';
 
+/** Adopt the profile of another device (after a verified QR pairing). */
+export function adoptBidder(storage: Storage | null, id: string): boolean {
+  if (!/^b_[A-Za-z0-9_-]{22}$/.test(id)) return false;
+  try { storage?.setItem(KEY, id); } catch { return false; }
+  return true;
+}
+
 /** A random, unguessable profile id for this device (sandbox). ENCHEV uses the signed-in user instead. */
 export function bidderId(storage: Storage | null): string {
   try {
@@ -45,6 +52,12 @@ export const wallet = {
   ledger: (bidder: string) => call<{ entries: LedgerEntry[]; message?: string }>(`/api/wallet/ledger?bidder=${encodeURIComponent(bidder)}`),
   deposit: (bidder: string, lotId: string, maxBid: Cents) => call<{ orderId?: string; checkoutUrl?: string | null; amount?: Cents; message?: string }>('/api/wallet/deposit', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidder, lotId, maxBid }),
+  }),
+  pairCode: (bidder: string) => call<{ code?: string; expiresAt?: number; signed?: boolean; message?: string }>('/api/wallet/pair', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidder }),
+  }),
+  redeem: (code: string) => call<{ bidder?: string; signed?: boolean; message?: string }>('/api/wallet/pair', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }),
   }),
   settle: (token: string, orderId: string, action: 'release' | 'forfeit' | 'refund', amount?: Cents) => call<{ ok?: boolean; state?: string; message?: string }>('/api/wallet/settle', {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ orderId, action, ...(amount ? { amount } : {}) }),

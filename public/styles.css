@@ -840,3 +840,12 @@ html.doc-open body { overflow: hidden; }
 .wl-token input { min-height: 44px; border-radius: 10px; border: 1px solid var(--line2); background: #14161c; padding: 0 12px; color: #fff; }
 .wl-op { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
 .wl-op span { flex: 1 1 100%; font-size: .84rem; }
+.wl-qr-box { width: 220px; max-width: 70%; margin: 8px 0; }
+.st-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: .9rem; }
+.st-flow span:not([aria-hidden]) { padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,.05); border: 1px solid var(--line); }
+.st-tbl td small { display: block; color: var(--muted); font-size: .72rem; margin-top: 2px; }
+.st-tbl tr[data-to="vat"] td:first-child { color: #f7dc95; }
+.st-tbl tr[data-to="seller"] td:first-child { color: #c6f6da; }
+.st-tbl tr[data-to="provider"] td { color: var(--muted); }
+@media (max-width: 1023px) { .st-tbl { font-size: .78rem; } .st-tbl th, .st-tbl td { padding: 8px 4px; } }
+@media (max-width: 600px) { .st-tbl th:nth-child(3), .st-tbl td:nth-child(3), .st-tbl td small { display: none; } .st-tbl { width: 100%; table-layout: fixed; } .st-tbl th:nth-child(1), .st-tbl td:nth-child(1) { width: 34%; } .st-tbl th:last-child, .st-tbl td:last-child { width: 30%; } .st-tbl tfoot th { white-space: normal; } }

@@ -95,7 +95,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     bubble.layout(); // the bid bar shows only on the live view (phones)
     info.layout();
     officeUi?.show(r, routeParts()[1]);
-    walletUi?.show(r === 'wallet');
+    walletUi?.show(r === 'wallet', routeParts()[1]);
     syncRealPolling();
     if (r === 'real') {
       if (bubble.isOpen) bubble.setOpen(false, false);
@@ -712,6 +712,6 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
   ctrl.subscribe(render);
   if (book) officeUi = mountOffice({ book, ctrl, toast, ref });
   else ref('wonCta').hidden = true;
-  walletUi = mountWallet({ ctrl, toast, ref });
+  walletUi = mountWallet({ ctrl, toast, ref, book });
   applyRoute(false);
 }

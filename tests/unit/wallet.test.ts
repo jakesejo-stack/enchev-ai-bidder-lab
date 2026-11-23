@@ -156,3 +156,43 @@ test('seller payout stays off (501) until KYB, contract, legal review and approv
   payout(req('POST') as never, o as never);
   assert.equal(out.status, 501);
 });
+
+// @ts-expect-error — plain JS Vercel function without type declarations
+import pairHandler from '../../api/wallet/pair.js';
+import { settlementOf, providerFee } from '../../src/deal/settlement.js';
+import { applyDeal, emptyDeal, quoteFor } from '../../src/deal/office.js';
+
+test('QR pairing: signed 5-minute code moves the same profile to the phone; forged or expired codes fail', async () => {
+  const env = { ENCHEV_PAIR_SECRET: 'pair-secret' };
+  const now = 1_795_450_000_000;
+  const a = res();
+  await pairHandler(req('POST', { body: { bidder: BIDDER } }) as never, a.o as never, { cfg: config(SANDBOX), env, now });
+  const code = (a.out.body as { code: string }).code;
+  assert.equal((a.out.body as { signed: boolean }).signed, true);
+  const b = res();
+  await pairHandler(req('POST', { body: { code } }) as never, b.o as never, { cfg: config(SANDBOX), env, now: now + 60_000 });
+  assert.deepEqual(b.out.body, { bidder: BIDDER, signed: true });
+  const forged = res();
+  await pairHandler(req('POST', { body: { code: code.replace(BIDDER, 'b_BBBBBBBBBBBBBBBBBBBBBB') } }) as never, forged.o as never, { cfg: config(SANDBOX), env, now });
+  assert.equal(forged.out.status, 401);
+  const late = res();
+  await pairHandler(req('POST', { body: { code } }) as never, late.o as never, { cfg: config(SANDBOX), env, now: now + 6 * 60_000 });
+  assert.equal(late.out.status, 410);
+  const prod = res();
+  await pairHandler(req('POST', { body: { bidder: BIDDER } }) as never, prod.o as never, { cfg: config({ ...SANDBOX, REVOLUT_ENV: 'production' }), env: {}, now });
+  assert.equal(prod.out.status, 503, 'no unsigned pairing outside sandbox');
+});
+
+test('money split: seller + company fees + VAT + transport = what the buyer paid, to the cent', () => {
+  const deal = { dealId: 'x', lotId: 'L', title: 'T', vin: 'EADEMXC0NCEPT0001', amount: 2_500_000, origin: 'EU' as const, location: 'София, BG', wonAt: 0, specs: [], viaSecondChance: false, runnerUps: [] };
+  const s0 = applyDeal(emptyDeal(), { seq: 1, at: 0, actor: 'server', body: { type: 'won', ...deal }, prev: '', hash: 'h' });
+  const s = { ...s0, delivery: { mode: 'delivery' as const, cityId: 'plovdiv', quote: quoteFor(deal, 'plovdiv', 'truck') } };
+  const st = settlementOf(s)!;
+  assert.equal(st.check, true);
+  const by = (to: string) => st.lines.filter((l) => l.to === to).reduce((t, l) => t + l.amount, 0);
+  assert.equal(by('seller'), 2_500_000, 'the seller gets the car price');
+  assert.equal(by('vat'), Math.round(by('company') * 0.2), 'VAT is 20 % of the fees');
+  assert.equal(by('seller') + by('company') + by('vat') + by('carrier'), st.paidByBuyer);
+  assert.equal(st.intoPool, st.paidByBuyer - providerFee(st.paidByBuyer));
+  assert.equal(st.companyNet, by('company') - providerFee(st.paidByBuyer));
+});

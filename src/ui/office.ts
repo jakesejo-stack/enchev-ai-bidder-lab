@@ -7,6 +7,7 @@ import { ACTOR_BG, PHASE_BG, STEPS, activeDeadline, invoiceOf, originCity, quote
 import { DOC_TITLE, availableDocs, buildDoc, docHash, fmtDate, passportUrl, renderDoc } from '../deal/docs.js';
 import { CARRIAGE_BG, CITIES, DEMO_TARIFF, type Carriage } from '../deal/transport.js';
 import { qrSvg } from '../deal/qr.js';
+import { settlementCard } from './settlement-view.js';
 import { formatEur, formatEurExact } from '../domain/money.js';
 import { icon } from './icons.js';
 
@@ -232,7 +233,7 @@ export function mountOffice({ book, ctrl, toast, ref }: OfficeDeps) {
     const s = d.state, deal = s.deal!;
     const docs = availableDocs(s);
     const issued = new Map(s.docs.map((x) => [x.kind, x.hash] as const));
-    return `<section class="card of-docs" aria-labelledby="od-h"><h2 id="od-h">${icon('layers')} Документи</h2>
+    return `${s.paid ? settlementCard(s) : ''}<section class="card of-docs" aria-labelledby="od-h"><h2 id="od-h">${icon('layers')} Документи</h2>
         <ul class="of-doclist">${docs.map((k) => `<li><button type="button" class="linkish" data-of="doc" data-id="${d.id}" data-kind="${k}">${esc(DOC_TITLE[k])}</button>${issued.has(k) ? '<span class="ok-badge">издаден</span>' : ''}</li>`).join('')}</ul>
       </section>
       <section class="card of-pass" aria-labelledby="op-h"><h2 id="op-h">Дигитален паспорт</h2>
