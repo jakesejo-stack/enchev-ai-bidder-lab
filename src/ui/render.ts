@@ -18,8 +18,10 @@ import { generateDemoHistory } from '../analytics/demo-history.js';
 import { similarLots } from '../domain/similar.js';
 import { quickBids } from '../domain/advisor.js';
 import { DEMO_LOT, SIMILAR_LOTS } from '../adapters/demo-lots.js';
+import type { DealBook } from '../deal/book.js';
+import { mountOffice } from './office.js';
 
-const ROUTES = ['live', 'dashboard', 'ai', 'bids', 'history', 'real', 'settings'] as const;
+const ROUTES = ['live', 'dashboard', 'ai', 'bids', 'mycars', 'office', 'passport', 'history', 'real', 'settings'] as const;
 type Route = (typeof ROUTES)[number];
 const timeFmt = new Intl.DateTimeFormat('bg-BG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
@@ -42,7 +44,7 @@ function setHtml(el: Element, h: string, cache: Map<Element, string>): void {
 
 export interface AnalyticsDeps { store: AnalyticsStore; recorder: EventRecorder | null; }
 
-export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter | null, analytics: AnalyticsDeps): void {
+export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter | null, analytics: AnalyticsDeps, book: DealBook | null = null): void {
   root.innerHTML = APP_HTML;
   const ref = <T extends HTMLElement = HTMLElement>(name: string): T => {
     const el = document.querySelector<T>(`[data-ref="${name}"]`);
@@ -71,20 +73,26 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
   const info = mountBubble(ref<HTMLButtonElement>('aii'), ref('aiiPanel'), () => render(), { storeKey: 'enchev-aii-pos-v1', side: 'left' });
 
   // ------------------------------------------------------------ routing
-  function route(): Route {
-    const r = location.hash.replace(/^#\/?/, '') as Route;
-    return ROUTES.includes(r) ? r : 'live';
+  let officeUi: ReturnType<typeof mountOffice> | null = null;
+  /** "#/office/<id>" → route "office", param "<id>". */
+  function routeParts(): [Route, string] {
+    const [head = '', ...rest] = location.hash.replace(/^#\/?/, '').split('/');
+    const r = head as Route;
+    return ROUTES.includes(r) ? [r, rest.join('/')] : ['live', ''];
   }
+  function route(): Route { return routeParts()[0]; }
   function applyRoute(focus: boolean): void {
     const r = route();
     document.documentElement.dataset.route = r;
     document.querySelectorAll<HTMLElement>('[data-view]').forEach((v) => { v.hidden = v.dataset.view !== r; });
+    const navR = r === 'office' || r === 'passport' ? 'mycars' : r;
     document.querySelectorAll<HTMLAnchorElement>('[data-nav]').forEach((a) => {
-      if (a.dataset.nav === r) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+      if (a.dataset.nav === navR) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
     if (focus) document.getElementById('main')?.focus({ preventScroll: false });
     bubble.layout(); // the bid bar shows only on the live view (phones)
     info.layout();
+    officeUi?.show(r, routeParts()[1]);
     syncRealPolling();
     if (r === 'real') {
       if (bubble.isOpen) bubble.setOpen(false, false);
@@ -699,5 +707,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
   let lastSubtitle = 0;
   let subTimer: ReturnType<typeof setTimeout> | undefined;
   ctrl.subscribe(render);
+  if (book) officeUi = mountOffice({ book, ctrl, toast, ref });
+  else ref('wonCta').hidden = true;
   applyRoute(false);
 }

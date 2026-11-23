@@ -11,6 +11,12 @@ export function formatEur(c: Cents): string {
   return eur.format(Math.round(c / 100)).replace(/ /g, ' ');
 }
 
+const exact = new Intl.NumberFormat('bg-BG', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** "42 500,00 €" — to the cent, for invoices, documents and anything the buyer pays. */
+export function formatEurExact(c: Cents): string {
+  return exact.format(c / 100).replace(/ /g, ' ');
+}
+
 /** For speech: "42 500 евро". */
 export function speakEur(c: Cents): string {
   return `${plain.format(Math.round(c / 100)).replace(/ /g, ' ')} евро`;

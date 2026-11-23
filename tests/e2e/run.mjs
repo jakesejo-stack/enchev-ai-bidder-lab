@@ -766,6 +766,136 @@ await run('views: dashboard, AI, bids, history, settings render in Bulgarian', {
   }
 });
 
+// ---------------------------------------------------------------- after the auction: Моите коли → Офис → паспорт
+const FAST = () => Object.assign(window.__bidder.book.delays, { provider: 200, esign: 300, docs: 200, pickup: 300, gpsStep: 150, gpsSteps: 5, broker: 300, secondChance: 400 });
+async function winDemo(p) {
+  await p.evaluate(FAST);
+  await p.click((await p.locator('[data-ref="cta"]').isVisible()) ? '[data-ref="cta"]' : '[data-ref="cta2"]');
+  await p.waitForSelector('dialog[open]');
+  await p.check('[data-ref="consent"]');
+  await p.click('[data-ref="cfSubmit"]');
+  await p.waitForFunction(() => window.__bidder.ctrl.leading, null, { timeout: 5000 });
+  await p.evaluate(() => window.__bidder.demo.server.endIn(1500));
+  await p.waitForFunction(() => window.__bidder.ctrl.ended, null, { timeout: 12000 });
+  await p.waitForSelector('[data-ref="wonCta"]:not([hidden])', { timeout: 5000 });
+}
+const phase = (p) => p.evaluate(() => { const id = location.hash.split('/')[2]; return window.__bidder.book.get(id)?.state.phase; });
+const waitPhase = (p, ph, timeout = 8000) => p.waitForFunction((x) => { const id = location.hash.split('/')[2]; return window.__bidder.book.get(id)?.state.phase === x; }, ph, { timeout });
+const waitText = (p, sel, needle, timeout = 8000) => p.waitForFunction(([s, n]) => (document.querySelector(s)?.textContent ?? '').includes(n), [sel, needle], { timeout });
+
+await run('win → „Моите коли“ → Офис: approve, delivery, Evrotrust, payment, documents, GPS, protocol, passport', { query: '?seed=3&competitors=0' }, async (p) => {
+  await winDemo(p);
+  await p.click('[data-ref="wonCta"]');
+  await p.waitForFunction(() => document.documentElement.dataset.route === 'office');
+  expect((await p.innerText('[data-ref="office"]')).includes('Спечелена — чака решение'), 'phase: waiting for decision');
+  expect((await p.locator('.sidenav a[data-nav="mycars"]').getAttribute('aria-current')) === 'page', 'Моите коли highlighted');
+  await p.waitForSelector('[data-of="approve"]:not([disabled])', { timeout: 5000 });
+  expect((await p.innerText('.of-main')).includes('Депозит'), 'deposit hold shown');
+  await p.screenshot({ path: join(shots, 'office-desktop-decision.png') });
+  // A button cannot confirm a payment or a winner: only their owners can.
+  const refused = await p.evaluate(async () => { const id = location.hash.split('/')[2]; return window.__bidder.book.as(id, 'buyer', { type: 'paid', amount: 1, ref: 'x' }); });
+  expect(/Платежен доставчик/.test(refused ?? ''), `buyer cannot record "paid": ${refused}`);
+  await p.click('[data-of="approve"]');
+  await waitPhase(p, 'approved');
+  await p.selectOption('[data-df="city"]', 'varna');
+  await waitText(p, '.of-quote', 'Варна');
+  await p.click('[data-of="delivery-save"]');
+  await waitText(p, '[data-saved]', 'доставка до Варна');
+  await p.click('[data-of="sign"]');
+  await waitPhase(p, 'signed');
+  const inv = await p.innerText('.of-inv');
+  expect(inv.includes('Транспорт до Варна') && inv.includes('Депозит'), 'invoice: transport + deposit deducted');
+  await p.screenshot({ path: join(shots, 'office-desktop-payment.png') });
+  await p.click('[data-of="pay"]');
+  await waitPhase(p, 'transport', 10000);
+  await p.waitForSelector('.of-map svg .truck');
+  await waitPhase(p, 'delivered', 10000);
+  expect(await p.locator('[data-of="received"]').isDisabled(), 'protocol needs both checks');
+  await p.check('[data-df="car-ok"]');
+  await p.check('[data-df="docs-ok"]');
+  await p.click('[data-of="received"]');
+  await waitPhase(p, 'completed');
+  // Documents: invoice opens on paper and matches the hash written in the log.
+  await p.click('[data-of="doc"][data-kind="invoice"]');
+  await p.waitForSelector('[data-ref="docOverlay"]:not([hidden]) .doc');
+  expect((await p.innerText('[data-ref="docBody"]')).includes('Съвпада с отпечатъка'), 'invoice matches its hash');
+  expect(await p.locator('.doc .qr').count() === 1, 'QR on the document');
+  await p.screenshot({ path: join(shots, 'office-document-invoice.png') });
+  await p.click('[data-doc-close]');
+  await p.click('[data-of="verify"]');
+  await p.waitForFunction(() => [...document.querySelectorAll('.toast')].some((t) => t.textContent.includes('Веригата е цяла') && t.textContent.includes('съвпадат')), null, { timeout: 5000 });
+  await p.click('.of-main a[href^="#/passport/"]');
+  await p.waitForFunction(() => document.documentElement.dataset.route === 'passport');
+  expect((await p.innerText('[data-ref="passport"]')).includes('EADEMXC0NCEPT0001'), 'passport by VIN');
+  await p.screenshot({ path: join(shots, 'passport-desktop.png'), fullPage: true });
+  return `${await phase(p) ?? 'passport'}`;
+});
+
+await run('decline: consent required, penalty from the deposit, car offered to the next bidder', { query: '?seed=3&competitors=0&opening=1' }, async (p) => {
+  await winDemo(p);
+  await p.goto(`${base}/?seed=3&competitors=0#/mycars`).catch(() => {});
+  await p.waitForFunction(() => window.__bidder?.book);
+  await p.evaluate(FAST);
+  await p.waitForSelector('.mc-card a[href^="#/office/"]');
+  expect((await p.innerText('[data-ref="mycars"]')).includes('E&A концептуално купе'), 'won car listed (survives reload)');
+  await p.click('.mc-card a[href^="#/office/"]');
+  await p.waitForSelector('[data-of="decline-ask"]');
+  await p.click('[data-of="decline-ask"]');
+  expect(await p.locator('[data-of="decline-confirm"]').isDisabled(), 'confirm disabled before consent');
+  expect((await p.innerText('.of-decline')).replace(/\s/g, '').includes('4300€'), 'shows the exact loss (10 %)');
+  await p.check('[data-df="decline-consent"]');
+  await p.click('[data-of="decline-confirm"]');
+  await waitPhase(p, 'declined');
+  await waitText(p, '.of-declined', 'взета от депозита');
+  await waitText(p, '.of-declined', 'Предложена на');
+  await p.screenshot({ path: join(shots, 'office-declined.png') });
+});
+
+await run('deadline passes without a decision → the server closes the deal with the penalty', { query: '?seed=3&competitors=0' }, async (p) => {
+  await winDemo(p);
+  await p.click('[data-ref="wonCta"]');
+  await p.waitForSelector('[data-of="approve"]:not([disabled])', { timeout: 5000 });
+  await p.click('.of-demo summary');
+  await p.click('[data-of="expire"]');
+  await waitPhase(p, 'declined');
+  expect((await p.innerText('.of-declined')).includes('Срокът изтече'), 'expired message');
+});
+
+await run('second chance: you were the runner-up → offer in „Моите коли“ → accept → your Office', { query: '?seed=3&competitors=0' }, async (p) => {
+  await p.evaluate(FAST);
+  await p.click('[data-ref="cta"]');
+  await p.waitForSelector('dialog[open]');
+  await p.check('[data-ref="consent"]');
+  await p.click('[data-ref="cfSubmit"]');
+  await p.waitForFunction(() => window.__bidder.ctrl.leading, null, { timeout: 5000 });
+  await p.evaluate(() => { const { demo, ctrl } = window.__bidder; demo.server.placeBid({ lotId: ctrl.auction.lot.lotId, amount: ctrl.nextValid, currency: 'EUR', idempotencyKey: 'rival' }, { bidderId: 'Купувач-7', authenticated: true }); demo.server.endIn(1200); });
+  await p.waitForFunction(() => window.__bidder.ctrl.ended, null, { timeout: 12000 });
+  expect(await p.locator('[data-ref="wonCta"]').isHidden(), 'no Office link when you lost');
+  await p.waitForFunction(() => window.__bidder.book.youWereRunnerUp, null, { timeout: 5000 });
+  await p.click('.sidenav a[data-nav="mycars"]');
+  await p.click('.of-demo summary');
+  await p.click('[data-of="winner-declined"]');
+  await p.waitForSelector('.mc-offer');
+  expect((await p.innerText('.mc-offer')).replace(/\s/g, '').includes('100€'), 'offer at your last bid');
+  await p.click('[data-of="offer-accept"]');
+  await p.waitForFunction(() => document.documentElement.dataset.route === 'office');
+  expect((await p.innerText('[data-ref="office"]')).includes('втори шанс'), 'deal via second chance');
+});
+
+await run('phone 390: „Моите коли“ and the Office fit the screen; 6 tabs in the bottom bar', { ctx: PHONE(390, 844), query: '?seed=3&competitors=0' }, async (p) => {
+  await winDemo(p);
+  expect(await p.locator('.bottomnav a').count() === 6, 'six bottom tabs');
+  await p.tap('.bottomnav a[data-nav="mycars"]');
+  await p.waitForSelector('.mc-card');
+  await p.waitForTimeout(400);
+  await p.screenshot({ path: join(shots, 'mobile-390-mycars.png') });
+  await p.tap('.mc-card a');
+  await p.waitForSelector('[data-of="approve"]:not([disabled])', { timeout: 5000 });
+  const over = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  expect(over <= 1, `no horizontal scroll (${over}px)`);
+  await p.screenshot({ path: join(shots, 'mobile-390-office.png'), fullPage: true });
+});
+
 await browser.close();
 srv.close();
 const passed = results.filter((r) => r.status === 'pass').length;

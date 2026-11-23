@@ -7,6 +7,7 @@ const navItems: [string, string, string][] = [
   ['live', 'gavel', 'Търгове на живо'],
   ['ai', 'chip', 'AI наддаване'],
   ['bids', 'layers', 'Моите оферти'],
+  ['mycars', 'car', 'Моите коли'],
   ['history', 'clock', 'История'],
   ['real', 'wifi', 'Реални данни'],
   ['settings', 'gear', 'Настройки'],
@@ -16,6 +17,7 @@ const mobileNav: [string, string, string][] = [
   ['live', 'gavel', 'На живо'],
   ['ai', 'chip', 'AI'],
   ['bids', 'layers', 'Оферти'],
+  ['mycars', 'car', 'Коли'],
   ['real', 'wifi', 'Реални'],
 ];
 
@@ -70,6 +72,7 @@ export const APP_HTML = `
           <ul class="specs" data-ref="specs" aria-label="Примерни характеристики"></ul>
           <p class="lot-retail" data-ref="lotRetail" hidden></p>
           <p class="lot-vat" data-ref="lotVat"></p>
+          <a class="won-cta" data-ref="wonCta" href="#/mycars" hidden>Спечели! Колата е в „Моите коли“ — влез в Офиса →</a>
         </div>
       </div>
       <div class="viewer blk-viewer" data-ref="viewer">
@@ -199,6 +202,10 @@ export const APP_HTML = `
       <div class="card"><table class="tbl"><thead><tr><th scope="col">Час</th><th scope="col">Сума</th><th scope="col">Статус</th><th scope="col">Детайли</th></tr></thead><tbody data-ref="bidsBody"></tbody></table></div>
     </section>
 
+    <section class="view view-office" data-view="mycars" aria-labelledby="mc-h" hidden><div data-ref="mycars"></div></section>
+    <section class="view view-office" data-view="office" aria-labelledby="of-h" hidden><div data-ref="office"></div></section>
+    <section class="view view-office" data-view="passport" aria-labelledby="pp-h" hidden><div data-ref="passport"></div></section>
+
     <section class="view" data-view="history" aria-labelledby="hist-h" hidden>
       <h1 id="hist-h">История</h1>
       <div class="hist-grid">
@@ -264,6 +271,9 @@ export const APP_HTML = `
   </nav>
 </div>
 
+<div class="doc-overlay" data-ref="docOverlay" role="dialog" aria-modal="true" aria-label="Документ" hidden>
+  <div class="doc-sheet"><div class="doc-tools"><button type="button" class="btn sm" data-doc-print>Печат / PDF</button><button type="button" class="btn ghost sm" data-doc-close>Затвори</button></div><div data-ref="docBody"></div></div>
+</div>
 <button type="button" class="david-pill" data-ref="davidPill" aria-pressed="true" title="DAVID — глас и 3D надписи: включи / изключи"><span class="david-eq" aria-hidden="true"><i></i><i></i><i></i></span><span class="david-name">DAVID</span><span class="sr-only" data-ref="davidPillState">включен</span></button>
 <button type="button" class="aib" data-ref="aib" aria-expanded="false" aria-controls="aib-panel" aria-label="AiBidder — съвети">
   <span class="aib-ic" aria-hidden="true">${icon('spark')}</span><span class="aib-name">AiBidder</span><span class="aib-dot" aria-hidden="true"></span>

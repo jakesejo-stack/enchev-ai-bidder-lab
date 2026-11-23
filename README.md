@@ -22,6 +22,7 @@ Desktop and mobile layouts follow the ENCHEV AI Bidder reference concepts (black
 - Connection loss, browser offline, unstable network (drops/reorder/duplicates) with gap detection and resync.
 - 3D **showroom** in a **white lobby**: the car on a white turntable podium (drag/arrow keys). For now the demo lot is the original E&A concept model (the Peugeot 206 scan was removed for now); adding an approved `public/models/porsche-911-gt3.glb` switches the demo lot to the Porsche 911 GT3 automatically at build time.
 - **VAT in one sentence under the car**: 20 % on the auction fees, not on the car; EU car, so no duty. The fee/VAT/duty formulas live in `src/domain/costs.ts` (Copart ES 2026 tariff as a benchmark, unit-tested).
+- **После търга — Моите коли → Офис → Дигитален паспорт** (ДЕМО): спечелената кола влиза в „Моите коли“ само от събитието на сървъра; Офис с Одобрявам / Ще помисля / Консултация / Отказвам, депозит и санкция, втори шанс за следващия наддавач, доставка с калкулатор, подпис с КЕП (Евротръст), плащане точно по фактурата, документи с QR и SHA-256, GPS транспорт, протокол и паспорт по VIN — виж [docs/OFFICE.md](docs/OFFICE.md).
 - Accessibility: keyboard, focus management, ARIA live regions, reduced motion, high contrast, 44 px targets, safe areas.
 
 ## Commands
