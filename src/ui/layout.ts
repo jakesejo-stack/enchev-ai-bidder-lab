@@ -97,7 +97,7 @@ export const APP_HTML = `
         <div class="status-chip" data-ref="statusChip"><span class="dot" aria-hidden="true"></span><span data-ref="statusText">ДЕМО · Активен търг</span></div>
       </div>
       <details class="card chart-card blk-charts" open data-ref="chartDetails">
-        <summary><h2>${icon('trend')} Динамика на наддаването</h2></summary>
+        <summary><h2>${icon('trend')} Цена на лота · на живо</h2></summary>
         <div class="chart-wrap" data-ref="chart"></div>
       </details>
     </section>

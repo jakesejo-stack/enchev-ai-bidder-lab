@@ -3,7 +3,8 @@ import type { DemoAdapter } from '../adapters/demo-adapter.js';
 import { APP_HTML } from './layout.js';
 import { mountBubble } from './bubble.js';
 import { icon } from './icons.js';
-import { priceChartSvg, barChartSvg, priceSeriesSvg } from './chart.js';
+import { barChartSvg, priceSeriesSvg } from './chart.js';
+import { mountLiveChart } from './live-chart.js';
 import { formatEur, parseEurInput } from '../domain/money.js';
 import { VAT_RATE } from '../domain/costs.js';
 import { formatCountdown } from '../domain/clock.js';
@@ -335,8 +336,8 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     t.hidden = !t.hidden;
     probWhy.setAttribute('aria-expanded', String(!t.hidden));
   });
-  // Collapsible chart sections start closed on phones.
-  if (matchMedia('(max-width: 1023px)').matches) ref<HTMLDetailsElement>('chartDetails').open = false;
+  // Live lot chart (stock-ticker style). Stays open on phones too — it is the main price view.
+  const liveChart = mountLiveChart(ref('chart'), { reducedMotion: reduceMotion });
 
   // Demo controls (event delegation: there are two copies of the buttons).
   document.addEventListener('click', (e) => {
@@ -490,7 +491,7 @@ export function mountApp(root: HTMLElement, ctrl: Controller, demo: DemoAdapter 
     }).join(''), html);
 
     // Chart, gauge, signals
-    setHtml(ref('chart'), priceChartSvg(a.bids, null, ctrl.adapter.bidderId), html);
+    if (lot) liveChart.update({ bids: a.bids, startPrice: lot.startPrice, mineId: ctrl.adapter.bidderId, live: !ended });
     const sigHtml = adv.signals.map((s) => `<li class="sig ${s.tone}"><span class="sig-l">${esc(s.label)}</span><span class="sig-v">${esc(s.value)}</span></li>`).join('');
     setHtml(ref('signals'), sigHtml, html);
     setHtml(ref('aiSignals'), sigHtml, html);
