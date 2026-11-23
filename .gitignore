@@ -5,3 +5,6 @@ dist/
 .env
 .env.*
 test-results/
+
+# local screenshots
+/*.png
