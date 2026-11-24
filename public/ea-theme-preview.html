@@ -1,0 +1,338 @@
+<!DOCTYPE html><html lang="bg"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EA theme preview</title><style>
+body{margin:0;background:#000;font-family:Montserrat,system-ui,sans-serif}
+.frames{display:flex;flex-wrap:wrap;gap:24px;justify-content:center;padding:20px}
+.phone{width:390px;height:844px;overflow:auto;border-radius:36px;border:2px solid #333;position:relative;transform:translateZ(0)}
+.phone .ea-theme{min-height:100%}
+.phone .ea-tabbar{position:absolute}
+.cap{color:#999;text-align:center;font:600 13px system-ui;margin-bottom:8px}
+/* ==========================================================================
+   ea-theme.css — East and West Auctioneers Group (EA)
+   Wallet (Портфейл) · Bidding Vault lock screen · Payment Methods
+   Everything is scoped under .ea-theme, so Mitko's existing styles stay untouched.
+   Usage: add class="ea-theme" to the page's main container.
+          Add "ea-theme--vault" as well for the purple lock screen.
+   ========================================================================== */
+
+.ea-theme {
+  --ea-black: #08090D;
+  --ea-graphite: #14161C;
+  --ea-graphite-2: #1C1F27;
+  --ea-line: rgba(255, 255, 255, 0.10);
+  --ea-red: #E53745;
+  --ea-red-deep: #8E1520;
+  --ea-red-soft: rgba(229, 55, 69, 0.16);
+  --ea-white: #FFFFFF;
+  --ea-silver: #B4B9C4;
+  --ea-green: #2FBF71;
+  --ea-amber: #F2A93B;
+  --ea-purple: #8A1FD6;
+  --ea-purple-deep: #2A0748;
+  --ea-radius: 22px;
+  --ea-radius-sm: 14px;
+  --ea-font: "Montserrat", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  background: var(--ea-black);
+  color: var(--ea-white);
+  font-family: var(--ea-font);
+  font-weight: 500;
+  min-height: 100vh;
+  padding: 16px 16px calc(110px + env(safe-area-inset-bottom));
+  -webkit-font-smoothing: antialiased;
+}
+.ea-theme *, .ea-theme *::before, .ea-theme *::after { box-sizing: border-box; }
+
+/* --------------------------------------------------------------------------
+   Header — EA logo + page title (Payment Methods)
+   -------------------------------------------------------------------------- */
+.ea-theme .ea-header { position: relative; text-align: center; padding: 8px 0 18px; }
+.ea-theme .ea-header__logo { height: 64px; width: auto; }
+.ea-theme .ea-header__brand {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  font-weight: 800; font-style: italic; letter-spacing: 0.04em; font-size: 20px;
+}
+.ea-theme .ea-header__brand::before,
+.ea-theme .ea-header__brand::after {
+  content: ""; flex: 0 1 70px; height: 3px; border-radius: 3px;
+  background: linear-gradient(90deg, transparent, var(--ea-red));
+}
+.ea-theme .ea-header__brand::after { background: linear-gradient(90deg, var(--ea-red), transparent); }
+.ea-theme .ea-header__sub {
+  color: var(--ea-red); font-weight: 800; font-style: italic;
+  letter-spacing: 0.08em; font-size: 14px; text-transform: uppercase;
+}
+.ea-theme .ea-back {
+  position: absolute; left: 0; top: 8px;
+  width: 48px; height: 48px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--ea-graphite-2); border: 1px solid var(--ea-line);
+  color: var(--ea-white); font-size: 22px; text-decoration: none;
+}
+.ea-theme .ea-title { font-size: 34px; font-weight: 800; line-height: 1.1; margin: 4px 0 8px; }
+.ea-theme .ea-lead { color: var(--ea-silver); font-size: 16px; line-height: 1.45; margin: 0 0 22px; }
+
+/* --------------------------------------------------------------------------
+   Group — payment section card (Vehicle & Large Purchases / Account & Service)
+   -------------------------------------------------------------------------- */
+.ea-theme .ea-group {
+  background: linear-gradient(180deg, var(--ea-graphite-2) 0%, var(--ea-graphite) 100%);
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--ea-radius);
+  padding: 14px 12px 12px;
+  margin-bottom: 18px;
+}
+.ea-theme .ea-group--featured {
+  border-color: var(--ea-red);
+  background:
+    radial-gradient(130% 90% at 0% 0%, rgba(229, 55, 69, 0.28) 0%, transparent 60%),
+    linear-gradient(180deg, #1A0B0E 0%, #0E0709 100%);
+  box-shadow: 0 0 0 1px rgba(229, 55, 69, 0.25), 0 10px 30px rgba(229, 55, 69, 0.12);
+}
+.ea-theme .ea-group__head {
+  display: grid; grid-template-columns: 64px 1fr; gap: 14px;
+  align-items: start; padding: 4px 6px 14px;
+}
+.ea-theme .ea-group__icon {
+  width: 64px; height: 64px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--ea-line);
+  color: var(--ea-white); font-size: 30px;
+}
+.ea-theme .ea-group--featured .ea-group__icon { color: var(--ea-red); }
+.ea-theme .ea-group__title { font-size: 21px; font-weight: 800; margin: 2px 0 4px; }
+.ea-theme .ea-group__desc { color: var(--ea-silver); font-size: 14px; line-height: 1.4; margin: 0; }
+
+.ea-theme .ea-list {
+  border: 1px solid var(--ea-line);
+  border-radius: var(--ea-radius-sm);
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* --------------------------------------------------------------------------
+   Row — one payment method / transaction, with chevron
+   -------------------------------------------------------------------------- */
+.ea-theme .ea-row {
+  display: grid; grid-template-columns: 72px 1fr auto;
+  align-items: center; gap: 10px;
+  width: 100%; min-height: 64px; padding: 10px 16px;
+  border: 0; border-top: 1px solid var(--ea-line);
+  background: transparent; color: inherit; text-align: left;
+  font: inherit; text-decoration: none; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease;
+}
+.ea-theme .ea-row:first-child { border-top: 0; }
+.ea-theme .ea-row:hover, .ea-theme .ea-row:active { background: rgba(255, 255, 255, 0.04); }
+.ea-theme .ea-row:focus-visible { outline: 2px solid var(--ea-red); outline-offset: -2px; }
+.ea-theme .ea-row__logo {
+  display: flex; align-items: center; justify-content: center;
+  height: 36px; font-size: 26px;
+}
+.ea-theme .ea-row__logo img, .ea-theme .ea-row__logo svg { max-height: 36px; max-width: 64px; }
+.ea-theme .ea-row__title { font-size: 18px; font-weight: 700; }
+.ea-theme .ea-row__sub { font-size: 12px; color: var(--ea-silver); margin-top: 2px; }
+.ea-theme .ea-row__chev { color: var(--ea-white); font-size: 22px; opacity: 0.9; }
+.ea-theme .ea-row__amount { font-weight: 700; font-variant-numeric: tabular-nums; }
+.ea-theme .ea-row--in  .ea-row__amount { color: var(--ea-green); }
+.ea-theme .ea-row--hold .ea-row__amount { color: var(--ea-amber); }
+.ea-theme .ea-row--failed .ea-row__amount { color: var(--ea-red); text-decoration: line-through; }
+.ea-theme .ea-row[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+
+/* Sandbox / test-mode badge — keeps demo money clearly apart from real money */
+.ea-theme .ea-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  background: rgba(242, 169, 59, 0.14); color: var(--ea-amber);
+  border: 1px solid rgba(242, 169, 59, 0.4);
+}
+
+/* --------------------------------------------------------------------------
+   Balance card — wallet top (available / on hold)
+   -------------------------------------------------------------------------- */
+.ea-theme .ea-balance {
+  position: relative; border-radius: var(--ea-radius); padding: 22px 20px; margin-bottom: 18px;
+  background:
+    radial-gradient(120% 140% at 100% 0%, var(--ea-red-soft) 0%, transparent 55%),
+    linear-gradient(160deg, var(--ea-graphite-2), var(--ea-graphite));
+  border: 1px solid var(--ea-line);
+}
+.ea-theme .ea-balance__label { color: var(--ea-silver); font-size: 13px; }
+.ea-theme .ea-balance__value { font-size: 36px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ea-theme .ea-balance .ea-badge { position: absolute; top: 16px; right: 16px; }
+
+/* --------------------------------------------------------------------------
+   Tabbar — floating pill nav, active tab = red pill
+   -------------------------------------------------------------------------- */
+.ea-theme .ea-tabbar {
+  position: fixed; left: 12px; right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 50;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px; border-radius: 999px;
+  background: rgba(14, 15, 19, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+}
+.ea-theme .ea-tabbar__item {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 10px 4px; border-radius: 999px;
+  color: var(--ea-white); font-size: 12px; font-weight: 600; text-decoration: none;
+  transition: background 0.2s ease;
+}
+.ea-theme .ea-tabbar__icon { font-size: 22px; line-height: 1; }
+.ea-theme .ea-tabbar__item svg { width: 24px; height: 24px; }
+.ea-theme .ea-tabbar__item.is-active,
+.ea-theme .ea-tabbar__item[aria-current="page"] {
+  flex: 1.35;
+  background: linear-gradient(180deg, #F0434F, var(--ea-red) 60%, #C8222F);
+  box-shadow: 0 6px 18px rgba(229, 55, 69, 0.45);
+  font-weight: 800;
+}
+
+/* ==========================================================================
+   VAULT — "Your Bidding Vault" purple passcode lock screen
+   <div class="ea-theme ea-theme--vault"> … <div class="ea-vault"> …
+   ========================================================================== */
+.ea-theme--vault {
+  background:
+    radial-gradient(90% 60% at 20% 30%, rgba(170, 60, 255, 0.35) 0%, transparent 60%),
+    radial-gradient(120% 80% at 50% 0%, var(--ea-purple) 0%, transparent 65%),
+    linear-gradient(180deg, #5A0FA0 0%, #320862 45%, var(--ea-purple-deep) 100%);
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+.ea-theme .ea-vault {
+  display: flex; flex-direction: column; align-items: center;
+  max-width: 400px; margin: 0 auto; text-align: center;
+}
+.ea-theme .ea-vault__lock {
+  width: 88px; height: 88px; border-radius: 24px;
+  display: grid; place-items: center; margin: 8px 0 18px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 10px 30px rgba(20, 0, 50, 0.4);
+  font-size: 40px;
+}
+.ea-theme .ea-vault__title { font-size: 30px; font-weight: 800; margin: 0 0 10px; }
+.ea-theme .ea-vault__text { font-size: 15px; line-height: 1.5; color: rgba(255, 255, 255, 0.85); margin: 0 0 26px; }
+
+/* Passcode dots */
+.ea-theme .ea-pin { display: flex; gap: 22px; justify-content: center; margin-bottom: 30px; }
+.ea-theme .ea-pin__dot {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  background: transparent;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.ea-theme .ea-pin__dot.is-filled { background: var(--ea-white); border-color: var(--ea-white); transform: scale(1.08); }
+.ea-theme .ea-pin.is-error { animation: ea-shake 0.35s ease; }
+.ea-theme .ea-pin.is-error .ea-pin__dot { border-color: #FF8A95; }
+@keyframes ea-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
+
+/* Keypad — round glass keys */
+.ea-theme .ea-keypad {
+  display: grid; grid-template-columns: repeat(3, 84px);
+  gap: 16px 28px; justify-content: center; margin-bottom: 28px;
+}
+.ea-theme .ea-key {
+  appearance: none; width: 84px; height: 84px; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04) 70%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 6px 18px rgba(15, 0, 40, 0.35);
+  color: var(--ea-white); font: 500 34px/1 var(--ea-font);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: transform 0.08s ease, background 0.15s ease;
+}
+.ea-theme .ea-key:active { transform: scale(0.94); background: rgba(255, 255, 255, 0.26); }
+.ea-theme .ea-key:focus-visible { outline: 2px solid var(--ea-white); outline-offset: 3px; }
+.ea-theme .ea-key--blank { visibility: hidden; }
+.ea-theme .ea-key--icon { font-size: 30px; }
+
+/* Biometric unlock button + forgot link */
+.ea-theme .ea-bio {
+  display: inline-flex; align-items: center; justify-content: center; gap: 12px;
+  width: 100%; max-width: 360px; min-height: 60px; padding: 14px 20px;
+  border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.12); color: var(--ea-white);
+  font: 600 16px var(--ea-font); cursor: pointer; margin-bottom: 22px;
+}
+.ea-theme .ea-bio:active { background: rgba(255, 255, 255, 0.2); }
+.ea-theme .ea-link { color: var(--ea-white); font-size: 16px; font-weight: 600; text-decoration: none; }
+
+/* --------------------------------------------------------------------------
+   Desktop + small phones + reduced motion
+   -------------------------------------------------------------------------- */
+@media (min-width: 900px) {
+  .ea-theme { padding: 32px 24px 120px; }
+  .ea-theme .ea-wrap { max-width: 720px; margin: 0 auto; }
+  .ea-theme .ea-tabbar { max-width: 640px; margin: 0 auto; }
+}
+@media (max-width: 360px) {
+  .ea-theme .ea-keypad { grid-template-columns: repeat(3, 72px); gap: 14px 22px; }
+  .ea-theme .ea-key { width: 72px; height: 72px; font-size: 30px; }
+  .ea-theme .ea-title { font-size: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ea-theme *, .ea-theme .ea-pin.is-error { transition: none !important; animation: none !important; }
+}
+</style></head><body><div class="frames">
+
+<div><div class="cap">Vault lock screen</div><div class="phone">
+<div class="ea-theme ea-theme--vault"><div class="ea-vault">
+ <div class="ea-header"><div class="ea-header__brand">EAST AND WEST</div><div class="ea-header__sub">Auctioneers Group</div></div>
+ <div class="ea-vault__lock">🔒</div>
+ <h1 class="ea-vault__title">Your Bidding Vault</h1>
+ <p class="ea-vault__text">Enter your passcode to access your bids and available balance (ready to withdraw).</p>
+ <div class="ea-pin" id="pin"></div>
+ <div class="ea-keypad" id="pad"></div>
+ <button class="ea-bio">☝️ Use fingerprint to unlock</button>
+ <a class="ea-link" href="#">Forgot your passcode?</a>
+</div></div></div></div>
+
+<div><div class="cap">Payment methods</div><div class="phone">
+<div class="ea-theme"><div class="ea-wrap">
+ <div class="ea-header"><a class="ea-back" href="#">←</a><div class="ea-header__brand">EAST AND WEST</div><div class="ea-header__sub">Auctioneers Group</div></div>
+ <h1 class="ea-title">Payment Methods</h1>
+ <p class="ea-lead">Secure and flexible payment options for all services on East and West Auctioneers Group (EA).</p>
+ <section class="ea-group ea-group--featured">
+  <div class="ea-group__head"><div class="ea-group__icon">🚗</div><div><h2 class="ea-group__title">Vehicle &amp; Large Purchases</h2><p class="ea-group__desc">For vehicles, machinery, heavy equipment and large shipments.</p></div></div>
+  <div class="ea-list">
+   <a class="ea-row" href="#"><span class="ea-row__logo">🏛️</span><span class="ea-row__title">Bank Transfer (Wire / SEPA)</span><span class="ea-row__chev">›</span></a>
+   <a class="ea-row" href="#"><span class="ea-row__logo">🌐</span><span class="ea-row__title">SWIFT Transfer</span><span class="ea-row__chev">›</span></a>
+  </div>
+ </section>
+ <section class="ea-group">
+  <div class="ea-group__head"><div class="ea-group__icon">🗂️</div><div><h2 class="ea-group__title">Account &amp; Service Payments</h2><p class="ea-group__desc">For registration fees, subscriptions, auction fees and other services.</p></div></div>
+  <div class="ea-list">
+   <a class="ea-row" href="#"><span class="ea-row__logo">💳</span><span class="ea-row__title">Visa</span><span class="ea-row__chev">›</span></a>
+   <a class="ea-row" href="#"><span class="ea-row__logo">💳</span><span class="ea-row__title">Mastercard</span><span class="ea-row__chev">›</span></a>
+   <a class="ea-row" href="#"><span class="ea-row__logo">📱</span><span class="ea-row__title">Apple Pay</span><span class="ea-row__chev">›</span></a>
+   <a class="ea-row" href="#"><span class="ea-row__logo">📱</span><span class="ea-row__title">Google Pay</span><span class="ea-row__chev">›</span></a>
+   <a class="ea-row" href="#"><span class="ea-row__logo">🅿️</span><span class="ea-row__title">PayPal</span><span class="ea-row__chev">›</span></a>
+   <a class="ea-row" href="#"><span class="ea-row__logo">📄</span><span class="ea-row__title">Letter of Credit (L/C)</span><span class="ea-row__chev">›</span></a>
+   <a class="ea-row" href="#"><span class="ea-row__logo">🛡️</span><span class="ea-row__title">Escrow Service</span><span class="ea-row__chev">›</span></a>
+  </div>
+ </section>
+</div>
+<nav class="ea-tabbar">
+ <a class="ea-tabbar__item" href="#"><span class="ea-tabbar__icon">🏠</span>Home</a>
+ <a class="ea-tabbar__item" href="#"><span class="ea-tabbar__icon">🔨</span>Auctions</a>
+ <a class="ea-tabbar__item is-active" href="#"><span class="ea-tabbar__icon">💳</span>Payments</a>
+ <a class="ea-tabbar__item" href="#"><span class="ea-tabbar__icon">🚘</span>Vehicles</a>
+ <a class="ea-tabbar__item" href="#"><span class="ea-tabbar__icon">👥</span>Group</a>
+</nav></div></div></div>
+
+</div><script>
+const pin=document.getElementById('pin'),pad=document.getElementById('pad');let v='';
+for(let i=0;i<6;i++){const d=document.createElement('span');d.className='ea-pin__dot';pin.appendChild(d)}
+const draw=()=>[...pin.children].forEach((d,i)=>d.classList.toggle('is-filled',i<v.length));
+['1','2','3','4','5','6','7','8','9','','0','⌫'].forEach(k=>{const b=document.createElement('button');b.className='ea-key'+(k===''?' ea-key--blank':'')+(k==='⌫'?' ea-key--icon':'');b.textContent=k;
+b.onclick=()=>{if(k==='⌫')v=v.slice(0,-1);else if(v.length<6)v+=k;draw();if(v.length===6){pin.classList.add('is-error');setTimeout(()=>{pin.classList.remove('is-error');v='';draw()},400)}};pad.appendChild(b)});
+</script></body></html>
