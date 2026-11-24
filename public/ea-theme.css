@@ -281,3 +281,62 @@ body{margin:0;background:#000;font-family:Montserrat,system-ui,sans-serif}
 @media (prefers-reduced-motion: reduce) {
   .ea-theme *, .ea-theme .ea-pin.is-error { transition: none !important; animation: none !important; }
 }
+
+/* EA mobile-first wallet: one 390px composition on phone AND desktop. */
+body:has([data-view="wallet"]:not([hidden])) {
+  background: #08090d !important;
+  color: #fff;
+}
+body:has([data-view="wallet"]:not([hidden])) .app {
+  background: #08090d !important;
+  min-height: 100dvh;
+}
+body:has([data-view="wallet"]:not([hidden])) .main {
+  background: #08090d !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+body:has([data-view="wallet"]:not([hidden])) .topbar,
+body:has([data-view="wallet"]:not([hidden])) .sidenav,
+body:has([data-view="wallet"]:not([hidden])) .bottomnav,
+body:has([data-view="wallet"]:not([hidden])) .demo-strip {
+  display: none !important;
+}
+body:has([data-view="wallet"]:not([hidden])) [data-view="wallet"] {
+  display: block !important;
+  width: 100% !important;
+  min-height: 100dvh;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: #08090d !important;
+}
+body:has([data-view="wallet"]:not([hidden])) [data-ref="wallet"].ea-theme {
+  width: min(100%, 430px);
+  min-height: 100dvh;
+  margin-inline: auto;
+  padding: 18px 16px 108px !important;
+  background: #08090d !important;
+  color: #fff !important;
+  box-shadow: 0 0 80px rgba(0,0,0,.45);
+  overflow-x: clip;
+}
+.ea-theme .of-grid, .ea-theme .of-col { display: flex !important; flex-direction: column !important; width: 100% !important; min-width: 0 !important; gap: 16px !important; }
+.ea-theme .of-grid { gap: 16px !important; }
+.ea-theme .card { background: #14161c !important; color: #fff !important; border: 1px solid rgba(255,255,255,.12) !important; border-radius: 20px !important; padding: 18px !important; margin: 0 !important; box-shadow: none !important; }
+.ea-theme .ea-group { margin-bottom: 0 !important; }
+.ea-theme .ea-group--featured { background: radial-gradient(130% 90% at 0% 0%,rgba(229,55,69,.28),transparent 60%),linear-gradient(180deg,#1a0b0e,#0e0709) !important; border: 1.5px solid #e53745 !important; }
+.ea-theme .ea-row { cursor: default; }
+.ea-theme .ea-row[aria-disabled="true"] { opacity: .65; }
+.ea-theme .of-head.ea-header { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
+.ea-theme .ea-title { font-size: clamp(27px, 7vw, 34px) !important; }
+.ea-theme .ea-header__brand { font-size: 17px; }
+.ea-theme .ea-mobile-nav { position: sticky; bottom: 8px; z-index: 12; display: flex; gap: 6px; background: rgba(20,22,28,.96); border: 1px solid rgba(255,255,255,.14); border-radius: 22px; padding: 7px; backdrop-filter: blur(14px); margin-top: 24px; }
+.ea-theme .ea-mobile-nav a { flex: 1; min-width: 0; padding: 12px 3px; border-radius: 16px; color: #b4b9c4; font-size: 11px; text-align: center; text-decoration: none; font-weight: 700; }
+.ea-theme .ea-mobile-nav a[aria-current="page"] { background: #e53745; color: white; }
+.ea-theme .ea-row__sub { display: block; }
+.ea-theme input { max-width: 100%; }
+@media(min-width:900px) {
+  body:has([data-view="wallet"]:not([hidden])) [data-ref="wallet"].ea-theme { padding: 24px 18px 110px !important; }
+}
