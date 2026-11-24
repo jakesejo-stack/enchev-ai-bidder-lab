@@ -1,3 +1,41 @@
-# ENCHEV AI Bidder Lab
+# ENCHEV AI Bidder Lab (ДЕМО)
 
-Isolated lab for the ENCHEV AI Bidder (DEMO). Work happens on feature branches; see open pull requests.
+Live-auction bidding interface with two assistants: **AiBidder** (advice, in a floating bubble) and **DAVID** (the Bulgarian voice of the auction).
+Desktop and mobile layouts follow the ENCHEV AI Bidder reference concepts (black / red / white, Montserrat).
+
+> **Everything here is DEMO.** Auctions run on a simulated server inside the browser. No bid ever reaches a
+> real auction. Real mode is disabled until an authorised Enchev Auctions backend exists — see
+> [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## What works (demo)
+
+- Live auction simulation: competing bidders, countdown from server time (clock-drift corrected), anti-sniping extensions, end of auction.
+- The auction **starts from 0 €** (first valid bid = first increment, 100 €); competitors bid valid amounts (early jumps, then increments). Current bid, step, **next valid bid**; bid history; price chart.
+- No personal limit on screen: bids may go up to the **1 000 000 € maximum, enforced by the server** (`ABOVE_HOUSE_MAX`). The confirmation lets you choose a higher valid amount (± step, +1 000 €, +10 000 €) **or type any amount you want** (rounded up to the step, capped by the server maximum); changing it requires consent again.
+- **AiBidder bubble** (advice) and **AI Info bubble** (all car characteristics + the lot's declared retail value, live auction statistics, auction rules): draggable, snap to the screen edges, never cover НАДДАЙ or each other; each opens a compact non-modal panel (tabs or swipe). AiBidder explains risk from observed data and the lot's **declared retail value** (listing data, not our estimate).
+- "Вероятност за успех": **Няма достатъчно данни** — no fabricated percentages, market values or hidden bidders.
+- Bid **confirmation** with consent, live re-validation if the price moves, idempotent submission.
+- **DAVID switch** on top of the AiBidder bubble: one tap turns DAVID's voice **and** the 3D auctioneer subtitles on/off (on by default, remembered on the device). DAVID is heard only while you are on the page — another tab, app or window silences him at once.
+- DAVID: your own recorded clips per event when added (`public/audio/david/manifest.json`, see [docs/DAVID_AUDIO.md](docs/DAVID_AUDIO.md); none yet), otherwise Bulgarian speech (if the device has a Bulgarian voice), always-on captions, mute, **pause = voice only**, rate; voice commands "цена", "наддай" (opens confirmation only), "пауза", "продължи".
+- **Табло · Аналитика**: LIVE / 24Ч / 7Д / 30Д / custom dates — bidding activity, unique bidders, completed auctions, timer extensions, duration, price growth, completed-auction table and CSV export, aggregated only from server-published auction events. REAL and DEMO sources never mix; a real-mode build shows only real data (none recorded yet) — see [docs/ANALYTICS.md](docs/ANALYTICS.md).
+- **Реални данни (read-only)**: `#/real` shows Enchev Auctions service readiness and verified real lots (with countdowns) through a GET-only, allow-listed bridge (`api/enchev.js`). No real bids exist upstream yet, and real bid submission stays disabled — see [docs/ENCHEV_REAL_DATA.md](docs/ENCHEV_REAL_DATA.md).
+- Connection loss, browser offline, unstable network (drops/reorder/duplicates) with gap detection and resync.
+- 3D **showroom** in a **white lobby**: the car on a white turntable podium (drag/arrow keys). For now the demo lot is the original E&A concept model (the Peugeot 206 scan was removed for now); adding an approved `public/models/porsche-911-gt3.glb` switches the demo lot to the Porsche 911 GT3 automatically at build time.
+- **VAT in one sentence under the car**: 20 % on the auction fees, not on the car; EU car, so no duty. The fee/VAT/duty formulas live in `src/domain/costs.ts` (Copart ES 2026 tariff as a benchmark, unit-tested).
+- **После търга — Моите коли → Офис → Дигитален паспорт** (ДЕМО): спечелената кола влиза в „Моите коли“ само от събитието на сървъра; Офис с Одобрявам / Ще помисля / Консултация / Отказвам, депозит и санкция, втори шанс за следващия наддавач, доставка с калкулатор, подпис с КЕП (Евротръст), плащане точно по фактурата, документи с QR и SHA-256, GPS транспорт, протокол и паспорт по VIN — виж [docs/OFFICE.md](docs/OFFICE.md).
+- Accessibility: keyboard, focus management, ARIA live regions, reduced motion, high contrast, 44 px targets, safe areas.
+
+## Commands
+
+```bash
+npm install
+npm run check      # typecheck + unit tests + production build (Vercel runs this)
+npm run e2e        # browser tests (needs Playwright + Chrome)
+```
+
+Demo URL parameters: `?seed=3` `?duration=60` (seconds) `?activity=2` `?unstable=1` `?competitors=0` `?skew=60000` `?latency=20`.
+
+## Credits / licences
+
+- three.js (MIT) · Montserrat (SIL OFL 1.1, `public/fonts/Montserrat-OFL.txt`).
+- `public/models/ea-demo-concept-coupe.glb`: original E&A procedural model, generated by `scripts/generate-demo-concept-glb.mjs`. Not a real vehicle.

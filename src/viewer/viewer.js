@@ -1,0 +1,227 @@
+// Interactive 3D showroom (drag / swipe / arrow keys to rotate). Loaded lazily.
+// The car stands on a white turntable podium in a bright white lobby. Any GLB works: it is
+// auto-scaled to car size and placed on the podium (lot.modelUrl). The Porsche demo lot uses
+// public/models/porsche-911-gt3.glb once that approved file is added; otherwise the original E&A model.
+// Never leaves a black box: any WebGL failure, context loss or load error shows the poster image.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+
+function normalise(obj, length) {
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = box.getSize(new THREE.Vector3());
+  if (size.x > size.z) obj.rotation.y = Math.PI / 2;
+  obj.updateMatrixWorld(true);
+  box.setFromObject(obj);
+  box.getSize(size);
+  obj.scale.multiplyScalar(length / Math.max(size.x, size.z, 1e-6));
+  obj.updateMatrixWorld(true);
+  box.setFromObject(obj);
+  const c = box.getCenter(new THREE.Vector3());
+  obj.position.x -= c.x; obj.position.z -= c.z; obj.position.y -= box.min.y;
+  return obj;
+}
+
+/** Soft red ring for the floor glow around the podium (additive). */
+function haloTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const r = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  r.addColorStop(0, 'rgba(229,55,69,0)');
+  r.addColorStop(0.68, 'rgba(229,55,69,0)');
+  r.addColorStop(0.73, 'rgba(229,55,69,0.55)');
+  r.addColorStop(0.78, 'rgba(229,55,69,0)');
+  r.addColorStop(1, 'rgba(229,55,69,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 256, 256);
+  return new THREE.CanvasTexture(c);
+}
+
+/** Soft round alpha mask so the glossy floor fades into the CSS showroom wall behind the canvas. */
+function floorFadeTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const r = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  r.addColorStop(0, '#fff'); r.addColorStop(0.42, '#fff'); r.addColorStop(0.78, '#3a3a3a'); r.addColorStop(1, '#000');
+  g.fillStyle = r; g.fillRect(0, 0, 256, 256);
+  return new THREE.CanvasTexture(c);
+}
+
+/** Showroom (3D part): white lacquered podium with a thin red E&A line. The white lobby walls are CSS. */
+function buildShowroom(scene) {
+  const PODIUM_R = 3.0, PODIUM_H = 0.22;
+  const glow = (color) => new THREE.MeshBasicMaterial({ color, toneMapped: false });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(PODIUM_R + 0.12, PODIUM_R + 0.25, PODIUM_H, 96), new THREE.MeshStandardMaterial({ color: 0xf1f2f4, roughness: 0.22, metalness: 0.05 }));
+  base.position.y = PODIUM_H / 2;
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(PODIUM_R + 0.19, PODIUM_R + 0.21, 0.02, 96, 1, true), glow(0xe53745));
+  band.position.y = PODIUM_H * 0.42;
+  const topRing = new THREE.Mesh(new THREE.TorusGeometry(PODIUM_R + 0.1, 0.012, 8, 160), glow(0xe53745));
+  topRing.rotation.x = Math.PI / 2; topRing.position.y = PODIUM_H + 0.004;
+  const footRing = new THREE.Mesh(new THREE.TorusGeometry(PODIUM_R + 0.27, 0.01, 8, 160), new THREE.MeshStandardMaterial({ color: 0xc9ccd2, roughness: 0.4 }));
+  footRing.rotation.x = Math.PI / 2; footRing.position.y = 0.012;
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(9.4, 9.4), new THREE.MeshBasicMaterial({ map: haloTexture(), transparent: true, opacity: 0.5, depthWrite: false, toneMapped: false }));
+  halo.rotation.x = -Math.PI / 2; halo.position.y = 0.006;
+  scene.add(base, band, topRing, footRing, halo);
+  // The top disc turns with the car (turntable); everything above is static.
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(PODIUM_R, 96), new THREE.MeshStandardMaterial({ color: 0xfafafb, roughness: 0.12, metalness: 0.02 }));
+  disc.rotation.x = -Math.PI / 2; disc.position.y = PODIUM_H + 0.002;
+  return { height: PODIUM_H, disc, halo, band, rings: [topRing, footRing] };
+}
+
+function shadowTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  r.addColorStop(0, 'rgba(0,0,0,0.55)'); r.addColorStop(0.6, 'rgba(0,0,0,0.22)'); r.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
+
+/**
+ * @param {HTMLElement} host
+ * @param {{ modelUrl: string, scan?: boolean, length?: number, onState?: (s: string, detail?: string) => void, reducedMotion?: boolean, maxDpr?: number }} opts
+ */
+export function mountViewer(host, opts) {
+  const state = (s, d) => { host.dataset.viewer = s; opts.onState && opts.onState(s, d); };
+  let renderer;
+  const canvas = document.createElement('canvas');
+  canvas.className = 'viewer-canvas';
+  canvas.tabIndex = 0;
+  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-label', '3D модел на лота. Плъзни или използвай стрелките, за да го завъртиш.');
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+  } catch (e) {
+    state('fallback', 'webgl');
+    return { destroy() {} };
+  }
+  host.appendChild(canvas);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, opts.maxDpr || 1.75));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  // Neutral tone mapping keeps the white lobby white and a real scan's baked colours true.
+  renderer.toneMapping = THREE.NeutralToneMapping;
+  renderer.toneMappingExposure = opts.scan ? 1.0 : 1.05;
+  renderer.setClearColor(0x000000, 0); // transparent: the CSS showroom wall shows behind the scene
+
+  const scene = new THREE.Scene();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environmentIntensity = opts.scan ? 0.35 : 0.9;
+  const camera = new THREE.PerspectiveCamera(30, 16 / 9, 0.1, 100);
+
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(14, 64), new THREE.MeshStandardMaterial({ color: 0xe9ebee, roughness: 0.55, metalness: 0, envMapIntensity: 0.4, alphaMap: floorFadeTexture(), transparent: true, depthWrite: false }));
+  floor.rotation.x = -Math.PI / 2;
+  scene.add(floor);
+  const showroom = buildShowroom(scene);
+  host.dataset.showroom = 'podium';
+  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false }));
+  shadow.rotation.x = -Math.PI / 2; shadow.position.y = showroom.height + 0.006; shadow.scale.set(3.2, 5.6, 1);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xd8dbe0, opts.scan ? 1.6 : 0.9));
+  // Soft white studio lights aimed at the car (a real scan already has its light baked in: keep it gentle).
+  const spot = (color, intensity, pos, angle = 0.5) => {
+    const l = new THREE.SpotLight(color, intensity, 0, angle, 0.85, 2);
+    l.position.set(...pos); l.target.position.set(0, 0.5, 0);
+    scene.add(l, l.target);
+  };
+  const k = opts.scan ? 0.35 : 1;
+  spot(0xffffff, 520 * k, [0, 9.5, 1.2], 0.42); // overhead softbox
+  spot(0xffffff, 300 * k, [-5.5, 4.5, 6.5]);    // front-left key
+  spot(0xffffff, 220 * k, [5.5, 3, 6.5]);       // front-right fill
+  spot(0xffffff, 260 * k, [0, 3.5, -7]);        // soft back light
+  host.dataset.lights = 'studio-white';
+
+  const turntable = new THREE.Group();
+  turntable.add(showroom.disc, shadow);
+  scene.add(turntable);
+  const car = new THREE.Group();
+  car.position.y = showroom.height;
+  turntable.add(car);
+  let yaw = -0.55, velocity = 0, dragging = false, lastX = 0, lastInput = 0, visible = true, raf = 0, dirty = true, destroyed = false, lastFrame = 0;
+  // Phones / low-core devices: 30 fps is plenty for a turntable and keeps the main thread free for live bids.
+  const minFrameMs = matchMedia('(pointer: coarse)').matches || (navigator.hardwareConcurrency || 8) <= 4 ? 33 : 0;
+
+  function resize() {
+    const w = host.clientWidth || 1, h = host.clientHeight || 1;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    // Fit the 4.6 m car on its 6 m podium: closer on wide frames, further on narrow ones.
+    const dist = camera.aspect < 1.2 ? 10.2 : camera.aspect < 1.9 ? 8.6 : 7.6;
+    camera.position.set(0, 2.15, dist);
+    camera.lookAt(0, 0.62, 0);
+    camera.updateProjectionMatrix();
+    dirty = true; loop();
+  }
+  const ro = new ResizeObserver(resize);
+  ro.observe(host);
+
+  function frame(t) {
+    raf = 0;
+    if (destroyed || !visible || renderer.getContext().isContextLost()) return;
+    if (minFrameMs && !dragging && t - lastFrame < minFrameMs) { loop(); return; }
+    lastFrame = t;
+    const idle = !dragging && t - lastInput > 2500;
+    if (!dragging) {
+      yaw += velocity;
+      velocity *= 0.93;
+      if (Math.abs(velocity) < 1e-4) velocity = 0;
+    }
+    const auto = idle && !opts.reducedMotion;
+    if (auto) yaw += 0.0025;
+    turntable.rotation.y = yaw;
+    if (!opts.reducedMotion) {
+      // Gentle "breathing" of the podium light.
+      showroom.halo.material.opacity = 0.4 + 0.12 * Math.sin(t / 900);
+    }
+    renderer.render(scene, camera);
+    dirty = false;
+    if (auto || velocity !== 0 || dragging) loop();
+  }
+  function loop() { if (!raf && !destroyed) raf = requestAnimationFrame(frame); }
+
+  canvas.addEventListener('pointerdown', (e) => { dragging = true; lastX = e.clientX; lastInput = performance.now(); canvas.setPointerCapture(e.pointerId); loop(); });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX; lastX = e.clientX;
+    velocity = dx * 0.006; yaw += velocity; lastInput = performance.now(); loop();
+  });
+  const end = () => { dragging = false; lastInput = performance.now(); loop(); };
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+  canvas.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      velocity = e.key === 'ArrowLeft' ? -0.06 : 0.06;
+      lastInput = performance.now(); loop();
+    }
+  });
+  canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); state('fallback', 'context-lost'); });
+  canvas.addEventListener('webglcontextrestored', () => {
+    scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+    state('ready'); dirty = true; loop();
+  });
+  const io = new IntersectionObserver((entries) => { visible = entries.some((x) => x.isIntersecting); if (visible) loop(); });
+  io.observe(host);
+  const onVis = () => { if (!document.hidden) loop(); };
+  document.addEventListener('visibilitychange', onVis);
+
+  state('loading');
+  new GLTFLoader().loadAsync(opts.modelUrl).then((gltf) => {
+    if (destroyed) return;
+    car.add(normalise(gltf.scene, opts.length || 4.6));
+    resize();
+    state('ready');
+  }).catch((err) => state('fallback', 'model: ' + (err && err.message)));
+
+  return {
+    destroy() {
+      destroyed = true;
+      cancelAnimationFrame(raf);
+      ro.disconnect(); io.disconnect();
+      document.removeEventListener('visibilitychange', onVis);
+      renderer.dispose();
+      canvas.remove();
+    },
+  };
+}
