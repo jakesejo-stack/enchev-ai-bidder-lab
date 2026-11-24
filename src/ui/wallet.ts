@@ -60,7 +60,7 @@ export function mountWallet({ ctrl, toast, ref, book }: WalletDeps) {
     const ruleText = rules ? (rules.fixedCents !== null ? `фиксиран тестов депозит ${formatEurExact(rules.fixedCents)}` : `${Math.round(rules.rate * 100)} % от максималната ти оферта, минимум ${formatEurExact(rules.minCents)}`) : '—';
     const opsToken = session?.getItem('enchev-ops-token') ?? '';
     ref('wallet').innerHTML = `
-      <div class="of-head ea-header"><div><p class="mc-kicker ea-balance__label">Портфейл</p><h1 id="wl-h" class="ea-title">${icon('wallet')} Вход и изход на парите</h1></div><span class="ea-badge">SANDBOX UI</span>${envChip()}</div>
+      <div class="of-head ea-header"><div class="ea-header__brand">EAST AND WEST</div><div class="ea-header__sub">Auctioneers Group</div><div><p class="mc-kicker ea-balance__label">Портфейл</p><h1 id="wl-h" class="ea-title">${icon('wallet')} Вход и изход на парите</h1></div><span class="ea-badge">SANDBOX UI</span>${envChip()}</div>
       <p class="muted">ENCHEV не пази паричен баланс. Депозитът е <b>задържане по твоята карта</b> в Revolut. Всяко движение по-долу е прочетено от Revolut.</p>
       <div class="of-grid"><div class="of-col">
         <section class="card wl-in" aria-labelledby="wi-h"><h2 id="wi-h">${icon('check')} Вход · депозит за наддаване</h2>
@@ -119,7 +119,7 @@ export function mountWallet({ ctrl, toast, ref, book }: WalletDeps) {
             <button type="button" class="btn ghost sm" data-wl="forfeit" data-id="${esc(e.orderId)}" ${e.state === 'authorised' ? '' : 'disabled'}>Санкция</button>
             <button type="button" class="btn ghost sm" data-wl="refund" data-id="${esc(e.orderId)}" ${e.state === 'completed' && e.refunded < e.amount ? '' : 'disabled'}>Върни</button></div>`).join('') || '<p class="muted small">Няма депозити.</p>'}
         </details>
-      </div></div>`;
+      </div></div>\n      <nav class="ea-mobile-nav" aria-label="EA навигация"><a href="#/dashboard">Начало</a><a href="#/live">Търгове</a><a href="#/wallet" aria-current="page">Портфейл</a><a href="#/mycars">Коли</a></nav>`;
   }
 
   async function refresh(): Promise<void> {
