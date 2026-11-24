@@ -82,14 +82,21 @@ export function mountWallet({ ctrl, toast, ref, book }: WalletDeps) {
           </ul>
           <p class="muted small">Решенията взима сървърът на търга, не бутон в браузъра. „Върнат“ се показва само след потвърждение от Revolut.</p>
         </section>
-        <section class="card wl-methods ea-group ea-group--featured" aria-labelledby="wm-h"><h2 id="wm-h" class="ea-group__title">${icon('check')} Методи за плащане</h2>
-          <ul class="wl-rules">
-            <li><b>Карта</b> (Visa, Mastercard) — за депозита и за плащането.</li>
-            <li><b>Apple Pay / Google Pay</b> — на телефона, ако картата ти го поддържа.</li>
-            <li><b>Revolut Pay</b> — за плащането на колата. За депозита не става: задържането работи само с карта.</li>
-            <li><b>Банков превод (SEPA)</b> — препоръчваме го за цената на колата.</li>
-          </ul>
-          <p class="muted small">Методите ги показва страницата на Revolut според телефона или компютъра. ENCHEV не вижда данните на картата.</p>
+        <section class="ea-group ea-group--featured" aria-labelledby="wm-h">
+          <div class="ea-group__head"><div class="ea-group__icon" aria-hidden="true">€</div><div><h2 class="ea-group__title" id="wm-h">Vehicle &amp; Large Purchases</h2><p class="ea-group__desc">Плащания за автомобили и големи покупки. Банковите инструкции се издават само от оторизиран оператор.</p></div></div>
+          <div class="ea-list">
+            <div class="ea-row" aria-disabled="true"><span class="ea-row__logo" aria-hidden="true">€</span><span class="ea-row__title">Bank Transfer (SEPA)<span class="ea-row__sub">Инструкции след потвърждение на покупката</span></span><span class="ea-row__chev">›</span></div>
+            <div class="ea-row" aria-disabled="true"><span class="ea-row__logo" aria-hidden="true">↗</span><span class="ea-row__title">SWIFT Transfer<span class="ea-row__sub">Не е активирано в лабораторията</span></span><span class="ea-row__chev">›</span></div>
+          </div>
+        </section>
+        <section class="ea-group" aria-labelledby="wm-service">
+          <div class="ea-group__head"><div class="ea-group__icon" aria-hidden="true">€</div><div><h2 class="ea-group__title" id="wm-service">Account &amp; Service Payments</h2><p class="ea-group__desc">Наличните методи се определят от защитения checkout на Revolut.</p></div></div>
+          <div class="ea-list">
+            <div class="ea-row"><span class="ea-row__logo" aria-hidden="true">V</span><span class="ea-row__title">Visa / Mastercard<span class="ea-row__sub">Чрез Revolut checkout, без съхранение на карта в EA</span></span><span class="ea-row__chev">›</span></div>
+            <div class="ea-row"><span class="ea-row__logo" aria-hidden="true">◉</span><span class="ea-row__title">Apple Pay / Google Pay<span class="ea-row__sub">Само ако Revolut ги предлага на устройството</span></span><span class="ea-row__chev">›</span></div>
+            <div class="ea-row"><span class="ea-row__logo" aria-hidden="true">R</span><span class="ea-row__title">Revolut Pay<span class="ea-row__sub">Не се използва за депозитно задържане</span></span><span class="ea-row__chev">›</span></div>
+            <div class="ea-row" aria-disabled="true"><span class="ea-row__logo" aria-hidden="true">P</span><span class="ea-row__title">PayPal / Escrow<span class="ea-row__sub">Не са свързани. Няма активен бутон за плащане.</span></span><span class="ea-row__chev">›</span></div>
+          </div>
         </section>
         ${(() => { const x = splitState(); return settlementCard(x.s, x.example); })()}
       </div><div class="of-col">
