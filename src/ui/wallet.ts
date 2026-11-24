@@ -17,6 +17,14 @@ const dt = new Intl.DateTimeFormat('bg-BG', { day: '2-digit', month: '2-digit', 
 export interface WalletDeps { ctrl: Controller; toast: (t: string, tone?: 'ok' | 'bad' | 'info') => void; ref: (name: string) => HTMLElement; book: DealBook | null; }
 
 export function mountWallet({ ctrl, toast, ref, book }: WalletDeps) {
+  // Load the EA theme only for this view. No global stylesheet or Mitko component is changed.
+  const walletRoot = ref('wallet');
+  walletRoot.classList.add('ea-theme');
+  const themeLink = document.createElement('link');
+  themeLink.rel = 'stylesheet';
+  themeLink.href = '/ea-theme.css';
+  themeLink.media = 'not all';
+  document.head.appendChild(themeLink);
   const storage = (() => { try { return window.localStorage; } catch { return null; } })();
   const session = (() => { try { return window.sessionStorage; } catch { return null; } })();
   let me = bidderId(storage);
@@ -52,7 +60,7 @@ export function mountWallet({ ctrl, toast, ref, book }: WalletDeps) {
     const ruleText = rules ? (rules.fixedCents !== null ? `фиксиран тестов депозит ${formatEurExact(rules.fixedCents)}` : `${Math.round(rules.rate * 100)} % от максималната ти оферта, минимум ${formatEurExact(rules.minCents)}`) : '—';
     const opsToken = session?.getItem('enchev-ops-token') ?? '';
     ref('wallet').innerHTML = `
-      <div class="of-head"><div><p class="mc-kicker">Портфейл</p><h1 id="wl-h">${icon('wallet')} Вход и изход на парите</h1></div>${envChip()}</div>
+      <div class="of-head ea-header"><div><p class="mc-kicker ea-balance__label">Портфейл</p><h1 id="wl-h" class="ea-title">${icon('wallet')} Вход и изход на парите</h1></div><span class="ea-badge">SANDBOX UI</span>${envChip()}</div>
       <p class="muted">ENCHEV не пази паричен баланс. Депозитът е <b>задържане по твоята карта</b> в Revolut. Всяко движение по-долу е прочетено от Revolut.</p>
       <div class="of-grid"><div class="of-col">
         <section class="card wl-in" aria-labelledby="wi-h"><h2 id="wi-h">${icon('check')} Вход · депозит за наддаване</h2>
@@ -74,7 +82,7 @@ export function mountWallet({ ctrl, toast, ref, book }: WalletDeps) {
           </ul>
           <p class="muted small">Решенията взима сървърът на търга, не бутон в браузъра. „Върнат“ се показва само след потвърждение от Revolut.</p>
         </section>
-        <section class="card wl-methods" aria-labelledby="wm-h"><h2 id="wm-h">${icon('check')} Методи за плащане</h2>
+        <section class="card wl-methods ea-group ea-group--featured" aria-labelledby="wm-h"><h2 id="wm-h" class="ea-group__title">${icon('check')} Методи за плащане</h2>
           <ul class="wl-rules">
             <li><b>Карта</b> (Visa, Mastercard) — за депозита и за плащането.</li>
             <li><b>Apple Pay / Google Pay</b> — на телефона, ако картата ти го поддържа.</li>
@@ -90,7 +98,7 @@ export function mountWallet({ ctrl, toast, ref, book }: WalletDeps) {
           <p class="muted small">Сканирай с камерата на телефона. Отваря същия профил и същите движения. Важи <b data-cd="${pair.expiresAt}">5:00 мин</b>.${pair.signed ? '' : ' Тестов код без подпис (няма ENCHEV_PAIR_SECRET) — само в Sandbox.'}</p>` : '<p class="muted">Покажи QR код и го сканирай с телефона, за да платиш оттам: Apple Pay, Google Pay или карта.</p>'}
           <div class="of-actions"><button type="button" class="btn sm" data-wl="pair">${pair ? 'Нов QR код' : 'Покажи QR код'}</button></div>
         </section>
-        <section class="card wl-ledger" aria-labelledby="wlg-h"><h2 id="wlg-h">${icon('layers')} Движения (от Revolut)</h2>
+        <section class="card wl-ledger ea-balance" aria-labelledby="wlg-h"><h2 id="wlg-h" class="ea-balance__label">${icon('layers')} Движения (от Revolut)</h2>
           ${entries.length ? `<table class="tbl"><thead><tr><th scope="col">Дата</th><th scope="col">Лот</th><th scope="col">Състояние</th><th scope="col" class="num">Сума</th></tr></thead><tbody>${entries.map((e) => `<tr data-state="${esc(e.state)}"><td>${e.createdAt ? esc(dt.format(new Date(e.createdAt))) : '—'}</td><td>${esc(e.lot || '—')}</td><td>${esc(e.label)}</td><td class="num">${formatEurExact(e.amount)}${e.refunded ? `<small> · върнати ${formatEurExact(e.refunded)}</small>` : ''}</td></tr>`).join('')}</tbody></table>` : `<p class="muted">${esc(ledgerNote || 'Още няма движения.')}</p>`}
           <div class="of-actions"><button type="button" class="btn ghost sm" data-wl="refresh">Обнови от Revolut</button></div>
           <p class="muted small">Профил: ${esc(me.slice(0, 8))}… (в ENCHEV — твоят акаунт).</p>
@@ -172,6 +180,7 @@ export function mountWallet({ ctrl, toast, ref, book }: WalletDeps) {
   return {
     show(on: boolean, param = ''): void {
       active = on;
+      themeLink.media = on ? 'all' : 'not all';
       if (on && param.startsWith('pair/')) {
         const code = decodeURIComponent(param.slice(5));
         void wallet.redeem(code).then((r) => {
